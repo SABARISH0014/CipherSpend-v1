@@ -1,0 +1,30 @@
+name: cipherspend
+description: Air-Gapped Expense Manager
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Core Security
+  flutter_secure_storage: ^9.0.0      # Storing MPIN/Keys securely
+  local_auth: ^2.1.6                  # Biometric Authentication
+  sqflite_sqlcipher: ^3.0.0           # AES-256 Encrypted Database
+  
+  # Utilities
+  shared_preferences: ^2.2.0          # Simple flags (isLoggedIn, etc.)
+  permission_handler: ^11.0.0         # Request SMS permissions
+  crypto: ^3.0.3                      # Hashing MPIN
+  path: ^1.8.3                        # File path helpers
+  path_provider: ^2.0.15              # Find storage paths
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
