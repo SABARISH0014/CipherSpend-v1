@@ -3,7 +3,6 @@ import 'package:path/path.dart';
 import '../utils/constants.dart';
 
 class DBService {
-  // Singleton Pattern
   static final DBService _instance = DBService._internal();
   factory DBService() => _instance;
   DBService._internal();
@@ -20,16 +19,15 @@ class DBService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, Constants.dbName);
 
-    // THE VAULT KEY: In production, generate this dynamically or use a user-derived key.
-    // For Week 1, we hardcode a conceptual key or retrieve it from SecureStorage.
+    // PRODUCTION NOTE: In a real app, use a secure key generation strategy.
     const password = "SuperSecretKey123!";
 
     return await openDatabase(
       path,
-      password: password, // AES-256 ENCRYPTION ENABLED
+      password: password,
       version: 1,
       onCreate: (db, version) async {
-        // 1. Transactions Table (With Hash for De-duplication)
+        // 1. Transactions Table (Updated with 'type' column)
         await db.execute('''
           CREATE TABLE ${Constants.tableTransactions}(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,11 +36,12 @@ class DBService {
             body TEXT,
             amount REAL,
             category TEXT,
+            type TEXT, 
             timestamp INTEGER
           )
         ''');
 
-        // 2. User Config Table (Settings)
+        // 2. User Config Table
         await db.execute('''
           CREATE TABLE ${Constants.tableUserConfig}(
             key TEXT PRIMARY KEY,
@@ -50,7 +49,7 @@ class DBService {
           )
         ''');
 
-        // 3. Categories Table (Budgeting & Classification)
+        // 3. Categories Table
         await db.execute('''
           CREATE TABLE categories(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,22 +63,25 @@ class DBService {
         await db.transaction((txn) async {
           await txn.rawInsert(
               'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
-              ['Food', 0xFF4CAF50]); // Green
+              ['Food', 0xFF4CAF50]);
           await txn.rawInsert(
               'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
-              ['Travel', 0xFF2196F3]); // Blue
+              ['Travel', 0xFF2196F3]);
           await txn.rawInsert(
               'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
-              ['Shopping', 0xFFFFC107]); // Amber
+              ['Shopping', 0xFFFFC107]);
           await txn.rawInsert(
               'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
-              ['Bills', 0xFFF44336]); // Red
+              ['Bills', 0xFFF44336]);
           await txn.rawInsert(
               'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
-              ['Entertainment', 0xFF9C27B0]); // Purple
+              ['Entertainment', 0xFF9C27B0]);
           await txn.rawInsert(
               'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
-              ['Uncategorized', 0xFF9E9E9E]); // Grey
+              ['Grocery', 0xFF009688]); // Added Grocery
+          await txn.rawInsert(
+              'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
+              ['Uncategorized', 0xFF9E9E9E]);
         });
       },
     );

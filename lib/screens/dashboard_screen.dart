@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../services/db_service.dart';
-import '../services/auth_service.dart';
+import '../services/sms_service.dart';
+import '../models/transaction_model.dart';
 import '../utils/constants.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -11,33 +11,52 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  String _dbStatus = "Checking Vault...";
+  final SmsService _smsService = SmsService();
+  List<TransactionModel> _transactions = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _initVault();
+    _loadData();
+    _listenToLiveSMS();
   }
 
-  Future<void> _initVault() async {
-    try {
-      // Trigger DB init to ensure encryption key works
-      await DBService().database;
-      setState(() => _dbStatus = "Vault Decrypted & Active");
-    } catch (e) {
-      setState(() => _dbStatus = "Encryption Error: $e");
-    }
-  }
+  // Initial Load: Sync History & Fetch DB
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
 
-  Future<void> _testLock() async {
-    bool authenticated = await AuthService().authenticateBiometric();
-    if (authenticated) {
+    // 1. Sync History (Background)
+    int newCount = await _smsService.syncHistory();
+    if (newCount > 0 && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Biometric Unlock Successful")));
-    } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Biometric Failed")));
+          SnackBar(content: Text("Synced $newCount new transactions")));
     }
+
+    // 2. Fetch from DB
+    await _refreshList();
+  }
+
+  Future<void> _refreshList() async {
+    final list = await _smsService.getTransactions();
+    setState(() {
+      _transactions = list;
+      _isLoading = false;
+    });
+  }
+
+  // Live Listener
+  void _listenToLiveSMS() {
+    _smsService.liveTransactionStream.listen((txn) async {
+      if (txn != null) {
+        await _smsService.saveTransaction(txn);
+        await _refreshList(); // Update UI instantly
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("New Spend: ₹${txn.amount} detected!")));
+        }
+      }
+    });
   }
 
   @override
@@ -45,56 +64,141 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: Constants.colorBackground,
       appBar: AppBar(
-        title: const Text("CipherSpend Vault"),
+        title: const Text("CipherSpend Dashboard"),
         backgroundColor: Constants.colorSurface,
         actions: [
           IconButton(
-            icon: const Icon(Icons.fingerprint),
-            onPressed: _testLock,
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadData,
           )
         ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.lock, size: 80, color: Constants.colorPrimary),
-            const SizedBox(height: 20),
-            const Text("Secure Environment", style: Constants.headerStyle),
-            const SizedBox(height: 10),
-            Text(
-              _dbStatus,
-              style: const TextStyle(color: Colors.white70),
-            ),
-            const SizedBox(height: 40),
-            Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              decoration: BoxDecoration(
-                color: Constants.colorSurface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.withOpacity(0.2)),
-              ),
-              child: const Column(
-                children: [
-                  Text("Phase 1 Complete",
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                          color: Colors.white)),
-                  SizedBox(height: 10),
-                  Text("• Identity Verified (Loopback)",
-                      style: TextStyle(color: Colors.grey)),
-                  Text("• MPIN Hashed (SHA-256)",
-                      style: TextStyle(color: Colors.grey)),
-                  Text("• DB Encrypted (SQLCipher)",
-                      style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: Constants.colorPrimary))
+          : _transactions.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.receipt_long,
+                          size: 60, color: Colors.grey.withOpacity(0.5)),
+                      const SizedBox(height: 10),
+                      const Text("No Transactions Found",
+                          style: Constants.subHeaderStyle),
+                      const Text("Wait for SMS or tap Refresh to scan history.",
+                          style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: _transactions.length,
+                  itemBuilder: (context, index) {
+                    final txn = _transactions[index];
+                    final date =
+                        DateTime.fromMillisecondsSinceEpoch(txn.timestamp);
+
+                    return Card(
+                      color: Constants.colorSurface,
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: _getCategoryColor(txn.category),
+                          child: Icon(_getCategoryIcon(txn.category),
+                              color: Colors.white, size: 20),
+                        ),
+
+                        // --- OVERFLOW FIX STARTS HERE ---
+                        title: Row(
+                          children: [
+                            // 1. Category Name (Takes remaining space)
+                            Expanded(
+                              child: Text(
+                                txn.category,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold),
+                                overflow: TextOverflow
+                                    .ellipsis, // Adds "..." if too long
+                                maxLines: 1,
+                              ),
+                            ),
+
+                            // 2. Payment Type Badge (Only if known)
+                            if (txn.type != "Unknown")
+                              Container(
+                                margin: const EdgeInsets.only(left: 8), // Gap
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.white10,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(txn.type,
+                                    style: const TextStyle(
+                                        color: Constants.colorPrimary,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                          ],
+                        ),
+                        // --- OVERFLOW FIX ENDS HERE ---
+
+                        subtitle: Text(
+                          "${txn.sender} • ${date.day}/${date.month} ${date.hour}:${date.minute}",
+                          style:
+                              const TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                        trailing: Text(
+                          "₹${txn.amount.toStringAsFixed(0)}", // Removed decimals for cleaner UI
+                          style: const TextStyle(
+                              color: Constants.colorPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    );
+                  },
+                ),
     );
+  }
+
+  Color _getCategoryColor(String cat) {
+    switch (cat) {
+      case 'Food':
+        return Colors.green;
+      case 'Travel':
+        return Colors.blue;
+      case 'Shopping':
+        return Colors.amber;
+      case 'Entertainment':
+        return Colors.purple;
+      case 'Bills':
+        return Colors.red;
+      case 'Grocery':
+        return Colors.teal;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getCategoryIcon(String cat) {
+    switch (cat) {
+      case 'Food':
+        return Icons.fastfood;
+      case 'Travel':
+        return Icons.directions_car;
+      case 'Shopping':
+        return Icons.shopping_bag;
+      case 'Entertainment':
+        return Icons.movie;
+      case 'Bills':
+        return Icons.receipt;
+      case 'Grocery':
+        return Icons.local_grocery_store;
+      default:
+        return Icons.question_mark;
+    }
   }
 }
