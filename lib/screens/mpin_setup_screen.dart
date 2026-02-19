@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../utils/constants.dart';
-import 'profile_setup_screen.dart';
+import 'profile_setup_screen.dart'; // Make sure this file exists
 
 class MPINSetupScreen extends StatefulWidget {
   const MPINSetupScreen({super.key});
@@ -21,23 +21,16 @@ class _MPINSetupScreenState extends State<MPINSetupScreen> {
       return;
     }
 
-    // 1. Use Service to Hash & Save
-    await _authService.setMpin(_pinController.text);
+    // 1. Use Service to Hash & Save (Corrected Name)
+    await _authService.saveMpin(_pinController.text);
 
     // 2. Prompt for Biometric Link
-    bool canCheckBiometrics = await _authService.isBiometricsAvailable();
+    // Note: authenticateBiometric() inside AuthService already checks if hardware is available.
+    bool didAuthenticate = await _authService.authenticateBiometric();
 
-    if (canCheckBiometrics && mounted) {
-      // Show dialog or just trigger immediate prompt
-      bool didAuthenticate = await _authService.authenticateBiometric();
-
-      if (didAuthenticate) {
-        await _authService.setBiometricEnabled(true);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Biometrics Linked!")));
-        }
-      }
+    if (didAuthenticate && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Biometrics Linked Successfully!")));
     }
 
     // 3. Navigate to Profile Setup
@@ -73,6 +66,8 @@ class _MPINSetupScreenState extends State<MPINSetupScreen> {
               style: Constants.subHeaderStyle,
             ),
             const SizedBox(height: 30),
+
+            // PIN INPUT
             TextField(
               controller: _pinController,
               keyboardType: TextInputType.number,
@@ -83,6 +78,8 @@ class _MPINSetupScreenState extends State<MPINSetupScreen> {
               textAlign: TextAlign.center,
               decoration: InputDecoration(
                 counterText: "",
+                filled: true,
+                fillColor: Constants.colorSurface,
                 enabledBorder: OutlineInputBorder(
                   borderSide: const BorderSide(color: Colors.grey),
                   borderRadius: BorderRadius.circular(12),
@@ -93,10 +90,13 @@ class _MPINSetupScreenState extends State<MPINSetupScreen> {
                 ),
               ),
             ),
+
             const SizedBox(height: 20),
             Text(_statusMessage,
                 style: const TextStyle(color: Constants.colorError)),
             const SizedBox(height: 20),
+
+            // SAVE BUTTON
             SizedBox(
               width: double.infinity,
               height: 50,

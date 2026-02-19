@@ -17,6 +17,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   String _errorMessage = "";
 
+  @override
+  void initState() {
+    super.initState();
+    // [NEW] Automatically set current day as default
+    int today = DateTime.now().day;
+    _salaryDateController.text = today.toString();
+  }
+
   Future<void> _completeSetup() async {
     final String name = _nameController.text.trim();
     final String budgetStr = _budgetController.text.trim();
@@ -46,6 +54,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     await prefs.setString(Constants.prefUserName, name);
     await prefs.setDouble(Constants.prefMonthlyBudget, budget);
     await prefs.setInt(Constants.prefSalaryDate, salaryDate);
+
+    // [IMPORTANT] Mark setup as complete so VerificationScreen knows next time
     await prefs.setBool(Constants.prefIsSetupComplete, true);
 
     // 3. Navigation
@@ -81,9 +91,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             TextField(
               controller: _nameController,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: "User Name",
-                prefixIcon: Icon(Icons.person, color: Colors.grey),
+                labelStyle: const TextStyle(color: Colors.grey),
+                prefixIcon: const Icon(Icons.person, color: Colors.grey),
+                filled: true,
+                fillColor: Constants.colorSurface,
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
             const SizedBox(height: 20),
@@ -93,24 +108,35 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               controller: _budgetController,
               keyboardType: TextInputType.number,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: "Monthly Budget (₹)",
-                prefixIcon:
-                    Icon(Icons.account_balance_wallet, color: Colors.grey),
+                labelStyle: const TextStyle(color: Colors.grey),
+                prefixIcon: const Icon(Icons.account_balance_wallet,
+                    color: Colors.grey),
+                filled: true,
+                fillColor: Constants.colorSurface,
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
             const SizedBox(height: 20),
 
-            // Salary Date Field
+            // Salary Date Field (Auto-filled)
             TextField(
               controller: _salaryDateController,
               keyboardType: TextInputType.number,
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: "Salary Cycle Start Date (e.g. 1)",
+              decoration: InputDecoration(
+                labelText: "Salary Cycle Start Date",
+                labelStyle: const TextStyle(color: Colors.grey),
                 hintText: "Day of the month (1-31)",
-                hintStyle: TextStyle(color: Colors.white24),
-                prefixIcon: Icon(Icons.calendar_today, color: Colors.grey),
+                hintStyle: const TextStyle(color: Colors.white24),
+                prefixIcon:
+                    const Icon(Icons.calendar_today, color: Colors.grey),
+                filled: true,
+                fillColor: Constants.colorSurface,
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
 

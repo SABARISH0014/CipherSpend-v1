@@ -1,37 +1,36 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 import 'screens/verification_screen.dart';
-import 'screens/dashboard_screen.dart';
+import 'services/ai_service.dart'; // [NEW] Import AI Service
 import 'utils/constants.dart';
+import 'dart:typed_data'; // Add this if missing
 
 void main() async {
-  // 1. Ensure Flutter bindings are initialized before async calls
+  // 1. Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. Check Shared Preferences to see if setup is done
-  final prefs = await SharedPreferences.getInstance();
-  final bool isSetupComplete =
-      prefs.getBool(Constants.prefIsSetupComplete) ?? false;
+  // 2. Load the AI Model (Week 3 Intelligence)
+  // We do this BEFORE runApp so the AI is ready as soon as the app opens
+  await AIService().loadModel();
 
-  // 3. Launch the App
-  runApp(MyApp(
-      startScreen: isSetupComplete
-          ? const DashboardScreen()
-          : const VerificationScreen()));
+  // 3. Lock orientation to Portrait for better UI stability
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  final Widget startScreen;
-
-  const MyApp({super.key, required this.startScreen});
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'CipherSpend',
-      debugShowCheckedModeBanner: false, // Hides the "Debug" banner
+      debugShowCheckedModeBanner: false,
 
-      // 4. Global Theme Configuration (Cyber/Dark Mode)
       theme: ThemeData.dark().copyWith(
         primaryColor: Constants.colorPrimary,
         scaffoldBackgroundColor: Constants.colorBackground,
@@ -46,17 +45,20 @@ class MyApp extends StatelessWidget {
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
+          iconTheme: IconThemeData(color: Colors.white),
         ),
 
         // Button Styling
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: Constants.colorPrimary,
-            foregroundColor: Colors.black, // Text color on buttons
-            textStyle: const TextStyle(fontWeight: FontWeight.bold),
+            foregroundColor: Colors.black,
+            textStyle:
+                const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
+            padding: const EdgeInsets.symmetric(vertical: 12),
           ),
         ),
 
@@ -65,6 +67,7 @@ class MyApp extends StatelessWidget {
           filled: true,
           fillColor: Constants.colorSurface,
           labelStyle: const TextStyle(color: Colors.grey),
+          hintStyle: const TextStyle(color: Colors.white24),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
@@ -80,11 +83,12 @@ class MyApp extends StatelessWidget {
           primary: Constants.colorPrimary,
           secondary: Constants.colorPrimary,
           surface: Constants.colorSurface,
+          error: Constants.colorError,
         ),
       ),
 
-      // 5. Route to correct screen
-      home: startScreen,
+      // Security Root: Start with Verification
+      home: const VerificationScreen(),
     );
   }
 }

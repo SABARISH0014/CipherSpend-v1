@@ -1,87 +1,42 @@
 import '../models/transaction_model.dart';
+import 'ai_service.dart'; // Import the TFLite Service
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 
 class ParserService {
-  // --- ADVANCED REGEX PATTERNS ---
-
-  // 1. Amount: Captures "Rs. 500", "INR 500.00", "Rs.500", "INR500"
+  // --- 1. REGEX PATTERNS ---
   static final RegExp _amountRegex = RegExp(
-      r'(?:rs\.?|inr|₹)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+      r'(?:rs\.?|inr|₹|amount)\s*[:\-\s]*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
       caseSensitive: false);
 
-  // 2. Transaction Types
-  static final RegExp _upiRegex =
-      RegExp(r'(upi|vpa|paytm|gpay|phonepe)', caseSensitive: false);
-  static final RegExp _debitCardRegex =
-      RegExp(r'(debit\s*card|dc|atm)', caseSensitive: false);
-  static final RegExp _creditCardRegex =
-      RegExp(r'(credit\s*card|cc)', caseSensitive: false);
-  static final RegExp _netBankingRegex =
-      RegExp(r'(net\s*banking|neft|rtgs|imps)', caseSensitive: false);
-
-  // 3. Merchant/Purpose Extraction (Simple Heuristic)
   static final RegExp _merchantRegex = RegExp(
-      r'(?:\sat\s|to\s|for\s)([a-zA-Z0-9\s]+?)(?:\.|with|on|through|via|using|$)',
+      r'(?:paid\s+to|sent\s+to|transfer\s+to|purchase\s+at|txn\s+at)\s+([a-zA-Z0-9\s\.]+)',
       caseSensitive: false);
 
-  // 4. Keyword Map (Expanded)
-  static final Map<String, String> _keywordMap = {
-    'zomato': 'Food',
-    'swiggy': 'Food',
-    'dominos': 'Food',
-    'kfc': 'Food',
-    'mcdonalds': 'Food',
-    'uber': 'Travel',
-    'ola': 'Travel',
-    'rapido': 'Travel',
-    'irctc': 'Travel',
-    'petrol': 'Travel',
-    'fuel': 'Travel',
-    'shell': 'Travel',
-    'netflix': 'Entertainment',
-    'bookmyshow': 'Entertainment',
-    'prime': 'Entertainment',
-    'spotify': 'Entertainment',
-    'cinema': 'Entertainment',
-    'jio': 'Bills',
-    'airtel': 'Bills',
-    'vi': 'Bills',
-    'bescom': 'Bills',
-    'electricity': 'Bills',
-    'water': 'Bills',
-    'gas': 'Bills',
-    'amazon': 'Shopping',
-    'flipkart': 'Shopping',
-    'myntra': 'Shopping',
-    'ajio': 'Shopping',
-    'decathlon': 'Shopping',
-    'grofers': 'Grocery',
-    'bigbasket': 'Grocery',
-    'blinkit': 'Grocery',
-    'zepto': 'Grocery',
-    'dmart': 'Grocery',
-  };
+  static final RegExp _upiRegex =
+      RegExp(r'(upi|vpa|paytm|gpay|phonepe|bhim|qr)', caseSensitive: false);
 
-  /// Main Parser Logic
+  // --- 2. MAIN PARSING FUNCTION ---
   static TransactionModel? parseSMS(String sender, String body, int timestamp) {
-    String cleanBody =
-        body.replaceAll(RegExp(r'\s+'), ' ').trim(); // Remove extra spaces
+    String cleanBody = body.replaceAll(RegExp(r'\s+'), ' ').trim();
+    String lowerBody = cleanBody.toLowerCase();
 
-    // A. Filter: Ignore OTPs and Credits (Income)
-    if (!_isExpense(cleanBody)) return null;
+    // A. SPAM FILTER
+    if (_isSpam(lowerBody, sender)) return null;
 
-    // B. Extract Amount
+    // B. AMOUNT EXTRACTION
     double amount = _extractAmount(cleanBody);
     if (amount == 0.0) return null;
 
-    // C. Determine Type (UPI, Card, etc.)
-    String type = _determineType(cleanBody);
+    // C. MERCHANT & TYPE
+    String merchant = _extractMerchant(cleanBody);
+    String type = _determineType(lowerBody);
 
-    // D. Determine Category
-    String category = _categorize(cleanBody, sender);
+    // D. INTELLIGENCE: TFLite Classification (Replaces Keyword Scoring)
+    // We pass the merchant + body for maximum context
+    String category = AIService().predictCategory("$merchant $cleanBody");
 
-    // E. Generate Unique Hash
+    // E. HASH GENERATION
     String hash = _generateHash(sender, cleanBody, timestamp);
 
     return TransactionModel(
@@ -90,34 +45,35 @@ class ParserService {
       body: cleanBody,
       amount: amount,
       category: category,
-      type: type, // [NEW] Storing the type
+      type: type,
       timestamp: timestamp,
+      merchant: merchant,
     );
   }
 
-  /// Checks if the SMS is a valid expense transaction
-  static bool _isExpense(String body) {
-    String lower = body.toLowerCase();
+  // --- 3. HELPER LOGIC ---
 
-    // Must contain at least one "Spent" keyword
-    bool isSpent = lower.contains("debited") ||
-        lower.contains("spent") ||
-        lower.contains("purchase") ||
-        lower.contains("sent") ||
-        lower.contains("paid") ||
-        lower.contains("withdrawn") ||
-        lower.contains("txn");
+  static bool _isSpam(String body, String sender) {
+    if (RegExp(r'^\d{10}$').hasMatch(sender)) return true;
 
-    // Must NOT contain "Income" keywords
-    bool isIncome = lower.contains("credited") ||
-        lower.contains("refund") ||
-        lower.contains("added"); // e.g., "Money added to wallet"
+    // Reject Income (Credits/Received)
+    if (body.contains("credited") || body.contains("received")) return true;
 
-    // Must NOT be an OTP/Auth message
-    // Note: We allow "otp" if it says "don't share otp", but reject "is your otp"
-    bool isAuth = lower.contains("is your otp") || lower.contains("login");
+    List<String> blacklist = [
+      "win",
+      "lottery",
+      "prize",
+      "offer",
+      "discount",
+      "loan",
+      "otp",
+      "code is"
+    ];
 
-    return isSpent && !isIncome && !isAuth;
+    for (var word in blacklist) {
+      if (body.contains(word)) return true;
+    }
+    return false;
   }
 
   static double _extractAmount(String body) {
@@ -129,28 +85,15 @@ class ParserService {
     return 0.0;
   }
 
-  static String _determineType(String body) {
-    if (_upiRegex.hasMatch(body)) return "UPI";
-    if (_debitCardRegex.hasMatch(body)) return "Debit Card";
-    if (_creditCardRegex.hasMatch(body)) return "Credit Card";
-    if (_netBankingRegex.hasMatch(body)) return "Net Banking";
-    return "Unknown";
+  static String _extractMerchant(String body) {
+    final match = _merchantRegex.firstMatch(body);
+    return match != null ? match.group(1)!.trim() : "Unknown Merchant";
   }
 
-  static String _categorize(String body, String sender) {
-    String content = "$body $sender".toLowerCase();
-
-    // 1. Check Keywords
-    for (var key in _keywordMap.keys) {
-      if (content.contains(key)) {
-        return _keywordMap[key]!;
-      }
-    }
-
-    // 2. Fallback: Try to extract merchant name and guess
-    // Example: "Paid to STARBUCKS" -> Guess "Food" (Future scope: ML Model)
-
-    return "Uncategorized";
+  static String _determineType(String body) {
+    if (_upiRegex.hasMatch(body)) return "UPI";
+    if (body.contains("card")) return "Card";
+    return "Bank Transfer";
   }
 
   static String _generateHash(String sender, String body, int timestamp) {

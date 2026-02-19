@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 class Constants {
-  // --- Secure Storage Keys ---
+  // --- Secure Storage Keys (Critical Security) ---
   static const String keyMpinHash = "cipherspend_mpin_hash";
   static const String keyBiometricEnabled = "cipherspend_bio_enabled";
 
-  // --- Shared Preferences Keys ---
+  // --- Shared Preferences Keys (User Settings) ---
   static const String prefIsSetupComplete = "is_setup_complete";
   static const String prefUserName = "user_name";
   static const String prefMonthlyBudget = "monthly_budget";
@@ -16,13 +16,13 @@ class Constants {
   static const String tableTransactions = "transactions";
   static const String tableUserConfig = "user_config";
 
-  // --- UI Colors & Themes ---
-  // A strict dark mode palette for "Hacker/Cyber" aesthetic
+  // --- UI Colors & Themes (Cyberpunk Aesthetic) ---
   static const Color colorPrimary = Color(0xFF00E676); // Cyber Green
   static const Color colorBackground = Color(0xFF121212); // Deep Dark
   static const Color colorSurface = Color(0xFF1E1E1E); // Card Background
   static const Color colorError = Color(0xFFCF6679);
 
+  // --- Text Styles ---
   static const TextStyle headerStyle = TextStyle(
       fontSize: 24,
       fontWeight: FontWeight.bold,

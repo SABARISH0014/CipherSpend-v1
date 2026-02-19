@@ -1,5 +1,5 @@
 import 'package:flutter/services.dart';
-import 'package:sqflite_sqlcipher/sqflite.dart';
+import 'package:sqflite_sqlcipher/sqflite.dart'; // Corrected import
 import 'db_service.dart';
 import 'parser_service.dart';
 import '../models/transaction_model.dart';
@@ -11,75 +11,98 @@ class SmsService {
   static const EventChannel _eventChannel =
       EventChannel('com.cipherspend/sms_stream');
 
-  /// 1. Sync Historical Data (Last 90 days from Inbox)
-  /// Returns the number of *new* transactions added to the DB.
-  Future<int> syncHistory() async {
+  /// [NEW] 1. Save a Single Transaction
+  /// Required for live SMS updates on the Dashboard
+  Future<void> saveTransaction(TransactionModel txn) async {
     try {
-      // Invoke the Native Kotlin function
+      final db = await DBService().database;
+      await db.insert(
+        Constants.tableTransactions,
+        txn.toMap(),
+        conflictAlgorithm:
+            ConflictAlgorithm.ignore, // Prevents duplicate entries
+      );
+    } catch (e) {
+      print("Error saving live transaction: $e");
+    }
+  }
+
+  /// 2. Sync Historical Data (Enhanced for Week 3 Progress Tracking)
+  Future<int> syncHistory(
+      {Function(int current, int total)? onProgress}) async {
+    try {
+      // Fetch raw messages from Native Bridge (MainActivity.kt)
       final List<dynamic> messages =
           await _methodChannel.invokeMethod('readSmsHistory');
+
+      if (messages.isEmpty) return 0;
 
       int addedCount = 0;
       final db = await DBService().database;
 
-      for (var msg in messages) {
+      // Use a Batch for speed during historical sync
+      Batch batch = db.batch();
+
+      for (int i = 0; i < messages.length; i++) {
+        var msg = messages[i];
         String sender = msg['sender'] ?? '';
         String body = msg['body'] ?? '';
         int timestamp = msg['timestamp'] ?? 0;
 
-        // Parse: Extract amount and category
+        // Run AI Categorization & Extraction
         var txn = ParserService.parseSMS(sender, body, timestamp);
 
         if (txn != null) {
-          // Insert into Encrypted DB
-          // ConflictAlgorithm.ignore ensures we don't duplicate data if hash exists
-          int id = await db.insert(Constants.tableTransactions, txn.toMap(),
+          batch.insert(Constants.tableTransactions, txn.toMap(),
               conflictAlgorithm: ConflictAlgorithm.ignore);
+          addedCount++;
+        }
 
-          if (id > 0) addedCount++;
+        // Update the UI Overlay every 5 messages to avoid lag
+        if (onProgress != null && i % 5 == 0) {
+          onProgress(i + 1, messages.length);
         }
       }
+
+      // Commit all categorized transactions to the encrypted vault at once
+      await batch.commit(noResult: true);
+
+      // Final progress update
+      if (onProgress != null) onProgress(messages.length, messages.length);
+
       return addedCount;
     } catch (e) {
-      print("History Sync Error: $e");
+      print("Week 3 Sync Error: $e");
       return 0;
     }
   }
 
-  /// 2. Listen for Live SMS (Real-time PDU Stream)
+  /// 3. Get Transactions for a specific Month
+  Future<List<TransactionModel>> getTransactionsByMonth(DateTime month) async {
+    final db = await DBService().database;
+    final start = DateTime(month.year, month.month, 1).millisecondsSinceEpoch;
+    final end = DateTime(month.year, month.month + 1, 1).millisecondsSinceEpoch;
+
+    final List<Map<String, dynamic>> maps = await db.query(
+        Constants.tableTransactions,
+        where: 'timestamp >= ? AND timestamp < ?',
+        whereArgs: [start, end],
+        orderBy: "timestamp DESC");
+
+    return List.generate(maps.length, (i) => TransactionModel.fromMap(maps[i]));
+  }
+
+  /// 4. Live Stream (Native Event Channel listener)
   Stream<TransactionModel?> get liveTransactionStream {
     return _eventChannel.receiveBroadcastStream().map((event) {
       try {
-        String sender = event['sender'] ?? '';
-        String body = event['body'] ?? '';
-        int timestamp =
-            event['timestamp'] ?? DateTime.now().millisecondsSinceEpoch;
-
-        // [WEEK 2 REQ] SIM Filtering Hook
-        // int subId = event['subscription_id'] ?? -1;
-        // In a future update, we can compare `subId` with the user's verified SIM.
-        // For now, we process all incoming SMS as per Phase 2 MVP.
-
-        return ParserService.parseSMS(sender, body, timestamp);
+        return ParserService.parseSMS(
+            event['sender'] ?? '',
+            event['body'] ?? '',
+            event['timestamp'] ?? DateTime.now().millisecondsSinceEpoch);
       } catch (e) {
-        print("Live Stream Parse Error: $e");
         return null;
       }
     });
-  }
-
-  /// 3. Save Live Transaction to DB
-  Future<void> saveTransaction(TransactionModel txn) async {
-    final db = await DBService().database;
-    await db.insert(Constants.tableTransactions, txn.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.ignore);
-  }
-
-  /// 4. Fetch All Transactions for Dashboard UI
-  Future<List<TransactionModel>> getTransactions() async {
-    final db = await DBService().database;
-    final List<Map<String, dynamic>> maps =
-        await db.query(Constants.tableTransactions, orderBy: "timestamp DESC");
-    return List.generate(maps.length, (i) => TransactionModel.fromMap(maps[i]));
   }
 }

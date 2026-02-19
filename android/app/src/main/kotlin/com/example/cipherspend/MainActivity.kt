@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.database.Cursor
 import android.net.Uri
+import android.os.Build
 import android.telephony.SmsManager
 import android.telephony.SmsMessage
 import androidx.annotation.NonNull
@@ -24,57 +25,65 @@ class MainActivity: FlutterFragmentActivity() {
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // 1. Method Channel: Sending Loopback & Reading History
+        // 1. Method Channel: SMS History & Loopback Testing
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL).setMethodCallHandler { call, result ->
-            if (call.method == "sendLoopbackSMS") {
-                val phone = call.argument<String>("phone")
-                val code = call.argument<String>("code")
-                sendSMS(phone, code)
-                result.success("SMS Sent")
-            } else if (call.method == "readSmsHistory") {
-                // Run heavy DB query on a background thread
-                Thread {
-                    val messages = readSmsInbox()
-                    runOnUiThread { result.success(messages) }
-                }.start()
-            } else {
-                result.notImplemented()
+            when (call.method) {
+                "sendLoopbackSMS" -> {
+                    val phone = call.argument<String>("phone")
+                    val message = call.argument<String>("message")
+                    sendSMS(phone, message)
+                    result.success("SMS Sent")
+                }
+                "readSmsHistory" -> {
+                    // Running heavy content resolver query on a background thread 
+                    // to prevent UI jank on i3-processor laptops.
+                    Thread {
+                        val messages = readSmsInbox()
+                        runOnUiThread { result.success(messages) }
+                    }.start()
+                }
+                else -> result.notImplemented()
             }
         }
 
-        // 2. Event Channel: Live Incoming SMS Stream
+        // 2. Event Channel: Live SMS Stream (Observer Pattern)
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL).setStreamHandler(
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                    registerReceiver(events)
+                    registerSmsReceiver(events)
                 }
                 override fun onCancel(arguments: Any?) {
-                    unregisterReceiver()
+                    unregisterSmsReceiver()
                 }
             }
         )
     }
 
-    // --- SMS SENDING ---
+    // --- SMS SENDING (Updated for Android 12+) ---
     private fun sendSMS(phone: String?, message: String?) {
+        if (phone == null || message == null) return
         try {
-            val smsManager = SmsManager.getDefault()
+            val smsManager: SmsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                this.getSystemService(SmsManager::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                SmsManager.getDefault()
+            }
             smsManager.sendTextMessage(phone, null, message, null, null)
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    // --- LIVE PDU PARSING (With SIM ID) ---
-    private fun registerReceiver(events: EventChannel.EventSink?) {
+    // --- LIVE SMS LISTENER (With SIM Identification) ---
+    private fun registerSmsReceiver(events: EventChannel.EventSink?) {
         smsReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action == "android.provider.Telephony.SMS_RECEIVED") {
                     val bundle = intent.extras
-                    // [WEEK 2 REQ] Extract Subscription ID (SIM Slot Index)
+                    val pdus = bundle?.get("pdus") as Array<*>?
                     val subId = bundle?.getInt("subscription", -1) ?: -1
                     
-                    val pdus = bundle?.get("pdus") as Array<Any>?
                     pdus?.forEach { pdu ->
                         val format = bundle.getString("format")
                         val msg = SmsMessage.createFromPdu(pdu as ByteArray, format)
@@ -83,58 +92,54 @@ class MainActivity: FlutterFragmentActivity() {
                         data["sender"] = msg.originatingAddress ?: "Unknown"
                         data["body"] = msg.messageBody ?: ""
                         data["timestamp"] = msg.timestampMillis
-                        data["subscription_id"] = subId // Identifying which SIM received it
+                        data["sim_slot"] = subId // Helpful for identifying which bank/SIM
                         
                         events?.success(data)
                     }
                 }
             }
         }
-        registerReceiver(smsReceiver, IntentFilter("android.provider.Telephony.SMS_RECEIVED"))
+        val filter = IntentFilter("android.provider.Telephony.SMS_RECEIVED")
+        registerReceiver(smsReceiver, filter)
     }
 
-    private fun unregisterReceiver() {
-        if (smsReceiver != null) {
-            unregisterReceiver(smsReceiver)
+    private fun unregisterSmsReceiver() {
+        smsReceiver?.let {
+            unregisterReceiver(it)
             smsReceiver = null
         }
     }
 
-    // --- HISTORY READER (Strict 90-Day Filter) ---
+    // --- HISTORICAL SCANNER (6-Month Range) ---
     private fun readSmsInbox(): List<Map<String, Any>> {
         val messages = ArrayList<Map<String, Any>>()
         val uri = Uri.parse("content://sms/inbox")
 
-        // [WEEK 2 REQ] Calculate timestamp for 90 Days Ago
-        // Current Time - (90 Days * 24 Hours * 60 Mins * 60 Secs * 1000 Ms)
-        val ninetyDaysAgo = System.currentTimeMillis() - (90L * 24 * 60 * 60 * 1000)
+        // 180 days history for comprehensive AI training/sync
+        val filterDate = System.currentTimeMillis() - (180L * 24 * 60 * 60 * 1000)
 
-        // Query: Select body, address, date WHERE date > 90_days_ago
         val projection = arrayOf("body", "address", "date")
         val selection = "date > ?"
-        val selectionArgs = arrayOf(ninetyDaysAgo.toString())
-        val sortOrder = "date DESC" // Newest first
+        val selectionArgs = arrayOf(filterDate.toString())
+        val sortOrder = "date DESC"
 
-        val cursor: Cursor? = contentResolver.query(
-            uri, 
-            projection, 
-            selection, 
-            selectionArgs, 
-            sortOrder
-        )
+        try {
+            val cursor: Cursor? = contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
+            cursor?.use {
+                val bodyIdx = it.getColumnIndex("body")
+                val addrIdx = it.getColumnIndex("address")
+                val dateIdx = it.getColumnIndex("date")
 
-        cursor?.use {
-            val bodyIndex = it.getColumnIndex("body")
-            val addressIndex = it.getColumnIndex("address")
-            val dateIndex = it.getColumnIndex("date")
-
-            while (it.moveToNext()) {
-                val map = HashMap<String, Any>()
-                map["body"] = it.getString(bodyIndex)
-                map["sender"] = it.getString(addressIndex)
-                map["timestamp"] = it.getLong(dateIndex)
-                messages.add(map)
+                while (it.moveToNext()) {
+                    val map = HashMap<String, Any>()
+                    map["body"] = it.getString(bodyIdx)
+                    map["sender"] = it.getString(addrIdx)
+                    map["timestamp"] = it.getLong(dateIdx)
+                    messages.add(map)
+                }
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
         return messages
     }

@@ -1,25 +1,24 @@
 class TransactionModel {
-  final int? id;
-  final String hash; // Unique SHA-256 Hash
-  final String sender; // e.g., "HDFCBK"
-  final String body; // Raw SMS body
-  final double amount; // Parsed Amount
-  final String category; // e.g., "Food", "Travel"
-  final String type; // [NEW] e.g., "UPI", "Card", "ATM"
-  final int timestamp; // Milliseconds since epoch
+  final String hash;
+  final String sender;
+  final String body;
+  final double amount;
+  final String category;
+  final String type; // UPI, Card, etc.
+  final String merchant; // [NEW] Zomato, Uber, etc.
+  final int timestamp;
 
   TransactionModel({
-    this.id,
     required this.hash,
     required this.sender,
     required this.body,
     required this.amount,
     required this.category,
     required this.type,
+    this.merchant = "Unknown",
     required this.timestamp,
   });
 
-  // Convert to Map for SQL Insert
   Map<String, dynamic> toMap() {
     return {
       'hash': hash,
@@ -28,20 +27,20 @@ class TransactionModel {
       'amount': amount,
       'category': category,
       'type': type,
+      'merchant': merchant,
       'timestamp': timestamp,
     };
   }
 
-  // Create Object from SQL Query
   factory TransactionModel.fromMap(Map<String, dynamic> map) {
     return TransactionModel(
-      id: map['id'],
       hash: map['hash'],
       sender: map['sender'],
       body: map['body'],
       amount: map['amount'],
       category: map['category'],
-      type: map['type'] ?? 'Unknown',
+      type: map['type'] ?? "Unknown",
+      merchant: map['merchant'] ?? "Unknown",
       timestamp: map['timestamp'],
     );
   }

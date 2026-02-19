@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:path/path.dart';
 import '../utils/constants.dart';
@@ -10,7 +11,7 @@ class DBService {
   static Database? _database;
 
   Future<Database> get database async {
-    if (_database != null) return _database!;
+    if (_database != null && _database!.isOpen) return _database!;
     _database = await _initDB();
     return _database!;
   }
@@ -19,7 +20,7 @@ class DBService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, Constants.dbName);
 
-    // PRODUCTION NOTE: In a real app, use a secure key generation strategy.
+    // Note: In a production scenario, retrieve this from flutter_secure_storage
     const password = "SuperSecretKey123!";
 
     return await openDatabase(
@@ -27,7 +28,7 @@ class DBService {
       password: password,
       version: 1,
       onCreate: (db, version) async {
-        // 1. Transactions Table (Updated with 'type' column)
+        // 1. Transactions Table (Includes Merchant & AI Category)
         await db.execute('''
           CREATE TABLE ${Constants.tableTransactions}(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,11 +38,12 @@ class DBService {
             amount REAL,
             category TEXT,
             type TEXT, 
+            merchant TEXT,
             timestamp INTEGER
           )
         ''');
 
-        // 2. User Config Table
+        // 2. User Config (For salary date, name, etc.)
         await db.execute('''
           CREATE TABLE ${Constants.tableUserConfig}(
             key TEXT PRIMARY KEY,
@@ -49,7 +51,7 @@ class DBService {
           )
         ''');
 
-        // 3. Categories Table
+        // 3. Categories (For Budget Tracking)
         await db.execute('''
           CREATE TABLE categories(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,31 +61,73 @@ class DBService {
           )
         ''');
 
-        // 4. Seed Default Categories
+        // 4. Seed Data
         await db.transaction((txn) async {
-          await txn.rawInsert(
-              'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
-              ['Food', 0xFF4CAF50]);
-          await txn.rawInsert(
-              'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
-              ['Travel', 0xFF2196F3]);
-          await txn.rawInsert(
-              'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
-              ['Shopping', 0xFFFFC107]);
-          await txn.rawInsert(
-              'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
-              ['Bills', 0xFFF44336]);
-          await txn.rawInsert(
-              'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
-              ['Entertainment', 0xFF9C27B0]);
-          await txn.rawInsert(
-              'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
-              ['Grocery', 0xFF009688]); // Added Grocery
-          await txn.rawInsert(
-              'INSERT OR IGNORE INTO categories(name, color_code) VALUES(?, ?)',
-              ['Uncategorized', 0xFF9E9E9E]);
+          List<String> defaults = [
+            'Food',
+            'Travel',
+            'Shopping',
+            'Bills',
+            'Entertainment',
+            'Grocery',
+            'Uncategorized'
+          ];
+          for (var cat in defaults) {
+            await txn.rawInsert(
+                'INSERT OR IGNORE INTO categories(name) VALUES(?)', [cat]);
+          }
         });
       },
     );
+  }
+
+  // --- Week 3 Helper Methods ---
+
+  /// Get total spend by category for a specific month (For Forecast/Charts)
+  Future<List<Map<String, dynamic>>> getCategorySpending(
+      int month, int year) async {
+    final db = await database;
+    final start = DateTime(year, month, 1).millisecondsSinceEpoch;
+    final end = DateTime(year, month + 1, 1).millisecondsSinceEpoch;
+
+    return await db.rawQuery('''
+      SELECT category, SUM(amount) as total 
+      FROM ${Constants.tableTransactions} 
+      WHERE timestamp >= ? AND timestamp < ? 
+      GROUP BY category
+    ''', [start, end]);
+  }
+
+  /// Get transactions for the Dashboard list
+  Future<List<Map<String, dynamic>>> getTransactionsByMonth(
+      int month, int year) async {
+    final db = await database;
+    final start = DateTime(year, month, 1).millisecondsSinceEpoch;
+    final end = DateTime(year, month + 1, 1).millisecondsSinceEpoch;
+
+    return await db.query(Constants.tableTransactions,
+        where: 'timestamp >= ? AND timestamp < ?',
+        whereArgs: [start, end],
+        orderBy: 'timestamp DESC');
+  }
+
+  // --- Clean Up & Security ---
+
+  Future<void> close() async {
+    final db = _database;
+    if (db != null && db.isOpen) {
+      await db.close();
+      _database = null;
+    }
+  }
+
+  Future<void> deleteDB() async {
+    await close();
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, Constants.dbName);
+    final file = File(path);
+    if (await file.exists()) {
+      await file.delete();
+    }
   }
 }
