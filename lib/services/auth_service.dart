@@ -23,9 +23,9 @@ class AuthService {
 
   // --- Registration Check ---
   Future<bool> isUserRegistered() async {
-    // Check if Setup Flag is true in SharedPrefs
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(Constants.prefIsSetupComplete) ?? false;
+    // Check if the MPIN actually exists in the Secure Storage
+    String? storedHash = await _storage.read(key: Constants.keyMpinHash);
+    return storedHash != null && storedHash.isNotEmpty;
   }
 
   // --- Save MPIN ---

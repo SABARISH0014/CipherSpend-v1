@@ -1,1 +1,9 @@
-{"1": "bills", "2": "food", "3": "travel", "4": "shopping", "5": "spam", "6": "transaction"}
+{
+  "0": "bills",
+  "1": "food",
+  "2": "shopping",
+  "3": "travel",
+  "4": "entertainment",
+  "5": "grocery",
+  "6": "others" 
+}

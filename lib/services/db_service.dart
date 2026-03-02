@@ -1,6 +1,9 @@
 import 'dart:io';
+import 'dart:convert';
+import 'dart:math';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../utils/constants.dart';
 
 class DBService {
@@ -20,9 +23,22 @@ class DBService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, Constants.dbName);
 
-    // Note: In a production scenario, retrieve this from flutter_secure_storage
-    const password = "SuperSecretKey123!";
+    // 1. Initialize Secure Storage
+    const secureStorage = FlutterSecureStorage();
 
+    // 2. Try to read the existing encrypted database key
+    String? password = await secureStorage.read(key: 'cipher_db_key');
+
+    // 3. If first launch, generate a random 256-bit key and save it securely
+    if (password == null) {
+      final random = Random.secure();
+      final values = List<int>.generate(32, (i) => random.nextInt(255));
+      password = base64UrlEncode(values);
+      await secureStorage.write(key: 'cipher_db_key', value: password);
+      print("🔐 Generated and stored new secure vault key.");
+    }
+
+    // 4. Open the SQLCipher database
     return await openDatabase(
       path,
       password: password,
@@ -128,6 +144,7 @@ class DBService {
     final file = File(path);
     if (await file.exists()) {
       await file.delete();
+      print("🗑️ Database deleted successfully.");
     }
   }
 }
