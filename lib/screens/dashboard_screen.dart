@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:intl/intl.dart';
 import '../services/sms_service.dart';
 import '../services/prediction_service.dart';
@@ -9,6 +10,7 @@ import 'transaction_detail_screen.dart';
 import 'settings_screen.dart';
 import 'visual_report_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../services/db_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -35,10 +37,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final PredictionService _predictionService = PredictionService();
 
   List<TransactionModel> _transactions = [];
-  Map<String, double> _forecast = {
+
+  // [FIXED] Added the missing toggle state for the prediction card
+  bool _showNextMonth = false;
+
+  // [FIXED] Changed to dynamic to match the new PredictionService map
+  Map<String, dynamic> _forecast = {
     "budget": 1.0,
     "spent": 0.0,
-    "projected": 0.0
+    "projected": 0.0,
+    "next_month_projected": 0.0
   };
 
   // --- Week 3 Sync States ---
@@ -200,9 +208,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildPredictionCard() {
     double spent = _forecast['spent'] ?? 0;
     double projected = _forecast['projected'] ?? 0;
+    double nextMonthProjected = _forecast['next_month_projected'] ?? 0;
     double budget = _forecast['budget'] ?? 1;
+
+    bool isCurrentMonth = _selectedMonth.month == DateTime.now().month &&
+        _selectedMonth.year == DateTime.now().year;
     bool isDanger = projected > budget;
     double progress = (budget > 0) ? (spent / budget).clamp(0.0, 1.0) : 0.0;
+
+    // Dynamic UI based on toggle
+    String rightLabel;
+    String rightValue;
+    Color rightColor;
+
+    if (isCurrentMonth) {
+      if (_showNextMonth) {
+        rightLabel = "NEXT MTH (PROJ)";
+        rightValue = "₹${nextMonthProjected.toStringAsFixed(0)}";
+        rightColor = Colors.orangeAccent; // Distinct color for next month
+      } else {
+        rightLabel = "PROJECTED";
+        rightValue = "₹${projected.toStringAsFixed(0)}";
+        rightColor = isDanger ? Colors.redAccent : Constants.colorPrimary;
+      }
+    } else {
+      rightLabel = "BUDGET";
+      rightValue = "₹${budget.toStringAsFixed(0)}";
+      rightColor = Constants.colorPrimary;
+    }
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -210,7 +243,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       decoration: BoxDecoration(
         color: Constants.colorSurface,
         borderRadius: BorderRadius.circular(16),
-        border: isDanger
+        border: isDanger && !_showNextMonth && isCurrentMonth
             ? Border.all(color: Colors.red.withOpacity(0.5), width: 2)
             : null,
       ),
@@ -221,14 +254,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               _buildStatColumn(
                   "SPENT", "₹${spent.toStringAsFixed(0)}", Colors.white),
-              _buildStatColumn(
-                (_selectedMonth.month == DateTime.now().month)
-                    ? "PROJECTED"
-                    : "BUDGET",
-                (_selectedMonth.month == DateTime.now().month)
-                    ? "₹${projected.toStringAsFixed(0)}"
-                    : "₹${budget.toStringAsFixed(0)}",
-                isDanger ? Colors.redAccent : Constants.colorPrimary,
+
+              // [NEW] Clickable Projection Column
+              GestureDetector(
+                onTap: isCurrentMonth
+                    ? () {
+                        setState(() {
+                          _showNextMonth = !_showNextMonth;
+                        });
+                      }
+                    : null,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: isCurrentMonth
+                      ? BoxDecoration(
+                          color: Colors.white.withOpacity(
+                              0.05), // Subtle highlight to show it's clickable
+                          borderRadius: BorderRadius.circular(8),
+                        )
+                      : null,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildStatColumn(rightLabel, rightValue, rightColor),
+                      if (isCurrentMonth) ...[
+                        const SizedBox(width: 6),
+                        Icon(Icons.touch_app,
+                            size: 16, color: Colors.grey.withOpacity(0.6))
+                      ]
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -242,6 +299,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
               color: isDanger ? Colors.redAccent : Constants.colorPrimary,
             ),
           ),
+          const SizedBox(height: 8),
+          // [NEW] Clear budget context at the bottom
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("₹0",
+                  style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold)),
+              Text("BUDGET: ₹${budget.toStringAsFixed(0)}",
+                  style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold)),
+            ],
+          )
         ],
       ),
     );
@@ -269,9 +343,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ? const Center(
               child: CircularProgressIndicator(color: Constants.colorPrimary))
           : _transactions.isEmpty
-              ? const Center(
-                  child:
-                      Text("No Transactions", style: Constants.subHeaderStyle))
+              ? _buildEmptyState() // [NEW] Cyberpunk Empty State
               : ListView.builder(
                   itemCount: _transactions.length,
                   itemBuilder: (context, index) =>
@@ -280,51 +352,135 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildTransactionItem(TransactionModel txn) {
-    final date = DateTime.fromMillisecondsSinceEpoch(txn.timestamp);
-    return Card(
-      color: Constants.colorSurface,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: ListTile(
-        onTap: () async {
-          bool? updated = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => TransactionDetailScreen(transaction: txn)));
-          if (updated == true) _loadData();
-        },
-        leading: CircleAvatar(
-          backgroundColor: _getCategoryColor(txn.category).withOpacity(0.2),
-          child: Icon(_getCategoryIcon(txn.category),
-              color: _getCategoryColor(txn.category), size: 20),
-        ),
-        title: Text(txn.category,
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold)),
-        subtitle: Text("${txn.merchant} • ${DateFormat('dd MMM').format(date)}",
-            style: const TextStyle(color: Colors.grey, fontSize: 12)),
-        trailing: Text("₹${txn.amount.toStringAsFixed(0)}",
-            style: const TextStyle(
-                color: Constants.colorPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.bold)),
+  // [NEW] Themed Empty State
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.security_update_warning_outlined,
+              size: 80, color: Constants.colorPrimary.withOpacity(0.4)),
+          const SizedBox(height: 16),
+          const Text("VAULT SECURE",
+              style: TextStyle(
+                  color: Constants.colorPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 3)),
+          const SizedBox(height: 8),
+          const Text("No unencrypted financial data\ndetected for this cycle.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey, fontSize: 14)),
+        ],
       ),
     );
   }
 
+  // [UPDATED] Swipe-to-delete Dismissible Wrapper (Fixed Async Gap)
+  Widget _buildTransactionItem(TransactionModel txn) {
+    final date = DateTime.fromMillisecondsSinceEpoch(txn.timestamp);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Dismissible(
+        key: Key(txn.hash),
+        direction: DismissDirection.endToStart, // Swipe left to delete
+        background: Container(
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 20),
+          decoration: BoxDecoration(
+            color: Colors.redAccent.withOpacity(0.8),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.delete_sweep, color: Colors.white, size: 30),
+        ),
+        onDismissed: (direction) async {
+          // 1. INSTANTLY remove it from the local UI list
+          setState(() {
+            _transactions.removeWhere((item) => item.hash == txn.hash);
+          });
+
+          final db = await DBService().database;
+
+          // 2. [NEW] Add to Blacklist so the AI ignores it forever
+          await db.insert('ignored_hashes', {'hash': txn.hash},
+              conflictAlgorithm: ConflictAlgorithm.ignore);
+
+          // 3. Delete from active transactions
+          await db.delete(Constants.tableTransactions,
+              where: 'hash = ?', whereArgs: [txn.hash]);
+
+          _loadData();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Data purged & Blacklisted."),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
+        child: Card(
+          color: Constants.colorSurface,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          child: ListTile(
+            onTap: () async {
+              bool? updated = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          TransactionDetailScreen(transaction: txn)));
+              if (updated == true) _loadData();
+            },
+            leading: CircleAvatar(
+              backgroundColor: _getCategoryColor(txn.category).withOpacity(0.2),
+              child: Icon(_getCategoryIcon(txn.category),
+                  color: _getCategoryColor(txn.category), size: 20),
+            ),
+            title: Text(txn.category,
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
+            subtitle: Text(
+                "${txn.merchant} • ${DateFormat('dd MMM').format(date)}",
+                style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            trailing: Text("₹${txn.amount.toStringAsFixed(0)}",
+                style: const TextStyle(
+                    color: Constants.colorPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- UPDATED CATEGORY MAPPINGS ---
   Color _getCategoryColor(String cat) {
-    if (cat.contains('Food')) return Colors.green;
-    if (cat.contains('Travel')) return Colors.blue;
-    if (cat.contains('Shopping')) return Colors.amber;
-    if (cat.contains('Bills')) return Colors.red;
+    String lowerCat = cat.toLowerCase();
+    if (lowerCat.contains('food')) return Colors.green;
+    if (lowerCat.contains('travel')) return Colors.blue;
+    if (lowerCat.contains('shopping')) return Colors.amber;
+    if (lowerCat.contains('bills')) return Colors.red;
+    if (lowerCat.contains('refund')) return Colors.tealAccent;
+    if (lowerCat.contains('cash')) return Colors.orange;
+    if (lowerCat.contains('investment')) return Colors.purpleAccent;
+    if (lowerCat.contains('transaction')) return Colors.indigo;
     return Colors.grey;
   }
 
   IconData _getCategoryIcon(String cat) {
-    if (cat.contains('Food')) return Icons.fastfood;
-    if (cat.contains('Travel')) return Icons.directions_car;
-    if (cat.contains('Shopping')) return Icons.shopping_bag;
-    if (cat.contains('Bills')) return Icons.receipt;
+    String lowerCat = cat.toLowerCase();
+    if (lowerCat.contains('food')) return Icons.fastfood;
+    if (lowerCat.contains('travel')) return Icons.directions_car;
+    if (lowerCat.contains('shopping')) return Icons.shopping_bag;
+    if (lowerCat.contains('bills')) return Icons.receipt;
+    if (lowerCat.contains('refund')) return Icons.currency_exchange;
+    if (lowerCat.contains('cash')) return Icons.money;
+    if (lowerCat.contains('investment')) return Icons.trending_up;
+    if (lowerCat.contains('transaction')) return Icons.swap_horiz;
     return Icons.payment;
   }
 }

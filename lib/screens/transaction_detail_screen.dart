@@ -30,7 +30,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final cats = await _trainingService.getCategories();
     setState(() {
       _categories = cats;
-      // Safety check: ensure selected category exists in list
       if (!_categories.contains(_selectedCategory) && _categories.isNotEmpty) {
         _selectedCategory = _categories.first;
       }
@@ -40,15 +39,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   Future<void> _saveTraining() async {
     setState(() => _isLoading = true);
-    // Update DB
     await _trainingService.trainTransaction(
         widget.transaction.hash, _selectedCategory);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Category updated to $_selectedCategory")));
-      Navigator.pop(
-          context, true); // Return 'true' to trigger dashboard refresh
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("SYSTEM OVERRIDE: Shifted to $_selectedCategory"),
+        backgroundColor: Constants.colorPrimary,
+      ));
+      Navigator.pop(context, true);
     }
   }
 
@@ -60,7 +59,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     return Scaffold(
       backgroundColor: Constants.colorBackground,
       appBar: AppBar(
-        title: const Text("Train CipherSpend"),
+        title: const Text("Neural Override"),
         backgroundColor: Constants.colorSurface,
       ),
       body: _isLoading
@@ -71,47 +70,76 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. RAW SMS (The Evidence)
-                  const Text("RAW SMS EVIDENCE",
+                  // 1. RAW SMS TERMINAL (The Evidence)
+                  const Text("> DECRYPTED_PAYLOAD",
                       style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 12,
+                          color: Constants.colorPrimary,
+                          fontFamily: 'monospace',
+                          fontSize: 14,
                           fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
+
+                  // Glowing Terminal Box
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                        color: Constants.colorSurface,
+                        color: Colors.black, // True black for terminal
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white10)),
-                    child: Text(
-                      widget.transaction.body,
-                      style: const TextStyle(
-                          fontFamily: 'monospace', color: Colors.white70),
+                        border: Border.all(color: Constants.colorPrimary),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Constants.colorPrimary.withOpacity(0.15),
+                            blurRadius: 15,
+                            spreadRadius: 2,
+                          )
+                        ]),
+                    // The Typing Animation Effect
+                    child: TweenAnimationBuilder<int>(
+                      tween: IntTween(
+                          begin: 0, end: widget.transaction.body.length),
+                      duration: const Duration(milliseconds: 1200),
+                      builder: (context, value, child) {
+                        String visibleText =
+                            widget.transaction.body.substring(0, value);
+                        // Add a blinking block cursor at the end while typing
+                        String cursor =
+                            value < widget.transaction.body.length ? "█" : "";
+                        return Text(
+                          visibleText + cursor,
+                          style: const TextStyle(
+                              fontFamily: 'monospace',
+                              color: Constants.colorPrimary,
+                              fontSize: 15,
+                              height: 1.5),
+                        );
+                      },
                     ),
                   ),
 
                   const SizedBox(height: 30),
 
                   // 2. TRANSACTION DETAILS
-                  _buildFactRow("Amount", "₹${widget.transaction.amount}"),
-                  _buildFactRow("Sender", widget.transaction.sender),
-                  _buildFactRow("Type", widget.transaction.type),
-                  _buildFactRow("Date",
+                  _buildFactRow(
+                      "EXTRACTED_AMT", "₹${widget.transaction.amount}"),
+                  _buildFactRow("TARGET_NODE", widget.transaction.merchant),
+                  _buildFactRow("PAYMENT_VECTOR", widget.transaction.type),
+                  _buildFactRow("TIMESTAMP",
                       "${date.day}/${date.month} ${date.hour}:${date.minute}"),
 
                   const SizedBox(height: 30),
-                  Divider(color: Colors.grey.withOpacity(0.2)),
+                  Divider(color: Constants.colorPrimary.withOpacity(0.3)),
                   const SizedBox(height: 20),
 
                   // 3. TRAINING INPUT
-                  const Text("CORRECT CATEGORY",
+                  const Text("> INJECT_NEW_CATEGORY",
                       style: TextStyle(
                           color: Constants.colorPrimary,
-                          fontSize: 12,
+                          fontFamily: 'monospace',
+                          fontSize: 14,
                           fontWeight: FontWeight.bold)),
                   const SizedBox(height: 10),
+
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
@@ -128,12 +156,14 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         dropdownColor: Constants.colorSurface,
                         icon: const Icon(Icons.arrow_drop_down,
                             color: Constants.colorPrimary),
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 16),
+                        style: const TextStyle(
+                            color: Constants.colorPrimary,
+                            fontFamily: 'monospace',
+                            fontSize: 16),
                         items: _categories.map((String value) {
                           return DropdownMenuItem<String>(
                             value: value,
-                            child: Text(value),
+                            child: Text(value.toUpperCase()), // Hackery caps
                           );
                         }).toList(),
                         onChanged: (newValue) {
@@ -149,14 +179,19 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   SizedBox(
                     width: double.infinity,
                     height: 50,
-                    child: ElevatedButton(
+                    child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Constants.colorPrimary,
-                        foregroundColor: Colors.black,
-                      ),
+                          backgroundColor: Constants.colorPrimary,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8))),
+                      icon: const Icon(Icons.memory),
                       onPressed: _saveTraining,
-                      child: const Text("Confirm & Train",
-                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      label: const Text("EXECUTE OVERRIDE",
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'monospace',
+                              letterSpacing: 2)),
                     ),
                   )
                 ],
@@ -165,18 +200,32 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
   }
 
+  // [FIXED] Added Expanded and CrossAxisAlignment to prevent RenderFlex overflows on long names
   Widget _buildFactRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment:
+            CrossAxisAlignment.start, // Aligns text to top if it wraps
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey)),
-          Text(value,
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white54, fontFamily: 'monospace')),
+          const SizedBox(
+              width: 16), // Ensures label and value don't crash into each other
+          Expanded(
+            child: Text(
+              value,
+              textAlign:
+                  TextAlign.right, // Keeps it neatly aligned to the right side
               style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  fontSize: 16)),
+                  fontFamily: 'monospace',
+                  fontSize: 14),
+            ),
+          ),
         ],
       ),
     );

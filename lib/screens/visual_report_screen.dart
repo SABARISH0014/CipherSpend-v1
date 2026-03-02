@@ -90,23 +90,23 @@ class _VisualReportScreenState extends State<VisualReportScreen> {
     );
   }
 
+  // --- UPDATED COLOR MAPPING ---
   Color _getColor(String cat) {
-    switch (cat) {
-      case 'Food':
-        return Colors.green;
-      case 'Travel':
-        return Colors.blue;
-      case 'Shopping':
-        return Colors.amber;
-      case 'Entertainment':
-        return Colors.purple;
-      case 'Bills':
-        return Colors.red;
-      case 'Grocery':
-        return Colors.teal;
-      default:
-        return Colors.grey;
-    }
+    String lowerCat = cat.toLowerCase();
+    if (lowerCat.contains('food')) return Colors.green;
+    if (lowerCat.contains('travel')) return Colors.blue;
+    if (lowerCat.contains('shopping')) return Colors.amber;
+    if (lowerCat.contains('bills')) return Colors.red;
+    if (lowerCat.contains('refund')) return Colors.tealAccent;
+    if (lowerCat.contains('cash')) return Colors.orange;
+    if (lowerCat.contains('investment')) return Colors.purpleAccent;
+    if (lowerCat.contains('transaction')) return Colors.indigo;
+
+    // Kept for backward compatibility with old DB records
+    if (lowerCat.contains('entertainment')) return Colors.purple;
+    if (lowerCat.contains('grocery')) return Colors.teal;
+
+    return Colors.grey;
   }
 }
 
@@ -183,23 +183,23 @@ class SankeyPainter extends CustomPainter {
     }
   }
 
+  // --- UPDATED COLOR MAPPING FOR PAINTER ---
   Color _getColor(String cat) {
-    switch (cat) {
-      case 'Food':
-        return Colors.green;
-      case 'Travel':
-        return Colors.blue;
-      case 'Shopping':
-        return Colors.amber;
-      case 'Entertainment':
-        return Colors.purple;
-      case 'Bills':
-        return Colors.red;
-      case 'Grocery':
-        return Colors.teal;
-      default:
-        return Colors.grey;
-    }
+    String lowerCat = cat.toLowerCase();
+    if (lowerCat.contains('food')) return Colors.green;
+    if (lowerCat.contains('travel')) return Colors.blue;
+    if (lowerCat.contains('shopping')) return Colors.amber;
+    if (lowerCat.contains('bills')) return Colors.red;
+    if (lowerCat.contains('refund')) return Colors.tealAccent;
+    if (lowerCat.contains('cash')) return Colors.orange;
+    if (lowerCat.contains('investment')) return Colors.purpleAccent;
+    if (lowerCat.contains('transaction')) return Colors.indigo;
+
+    // Kept for backward compatibility with old DB records
+    if (lowerCat.contains('entertainment')) return Colors.purple;
+    if (lowerCat.contains('grocery')) return Colors.teal;
+
+    return Colors.grey;
   }
 
   @override

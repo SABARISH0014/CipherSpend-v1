@@ -23,13 +23,9 @@ class DBService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, Constants.dbName);
 
-    // 1. Initialize Secure Storage
     const secureStorage = FlutterSecureStorage();
-
-    // 2. Try to read the existing encrypted database key
     String? password = await secureStorage.read(key: 'cipher_db_key');
 
-    // 3. If first launch, generate a random 256-bit key and save it securely
     if (password == null) {
       final random = Random.secure();
       final values = List<int>.generate(32, (i) => random.nextInt(255));
@@ -42,9 +38,13 @@ class DBService {
     return await openDatabase(
       path,
       password: password,
-      version: 1,
+      version: 2,
+      onOpen: (db) async {
+        // [THE FIX] Bulletproof fallback: Ensures the blacklist table exists every time the app opens
+        await db.execute(
+            'CREATE TABLE IF NOT EXISTS ignored_hashes(hash TEXT PRIMARY KEY)');
+      },
       onCreate: (db, version) async {
-        // 1. Transactions Table (Includes Merchant & AI Category)
         await db.execute('''
           CREATE TABLE ${Constants.tableTransactions}(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,7 +59,6 @@ class DBService {
           )
         ''');
 
-        // 2. User Config (For salary date, name, etc.)
         await db.execute('''
           CREATE TABLE ${Constants.tableUserConfig}(
             key TEXT PRIMARY KEY,
@@ -67,7 +66,6 @@ class DBService {
           )
         ''');
 
-        // 3. Categories (For Budget Tracking)
         await db.execute('''
           CREATE TABLE categories(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,7 +75,9 @@ class DBService {
           )
         ''');
 
-        // 4. Seed Data
+        // [NEW] Create Blacklist table for fresh installs
+        await db.execute('CREATE TABLE ignored_hashes(hash TEXT PRIMARY KEY)');
+
         await db.transaction((txn) async {
           List<String> defaults = [
             'Food',
@@ -93,6 +93,14 @@ class DBService {
                 'INSERT OR IGNORE INTO categories(name) VALUES(?)', [cat]);
           }
         });
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        // [NEW] Seamlessly migrates existing databases!
+        if (oldVersion < 2) {
+          await db.execute(
+              'CREATE TABLE IF NOT EXISTS ignored_hashes(hash TEXT PRIMARY KEY)');
+          print("🔄 Database upgraded to v2: Added Blacklist Table");
+        }
       },
     );
   }

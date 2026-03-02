@@ -4,18 +4,29 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'db_service.dart';
 import 'parser_service.dart';
 import 'ai_service.dart';
-import 'sms_bridge.dart'; // Make sure this path matches where you saved SmsBridge
+import 'sms_bridge.dart';
 import '../models/transaction_model.dart';
 import '../utils/constants.dart';
 
 class SmsService {
-  // Use the dedicated bridge instead of hardcoding MethodChannels here
   final SmsBridge _bridge = SmsBridge();
+
+  /// Helper to grab the Blacklist instantly
+  Future<Set<String>> _getBlacklist(Database db) async {
+    final List<Map<String, dynamic>> ignoredData =
+        await db.query('ignored_hashes');
+    return ignoredData.map((e) => e['hash'] as String).toSet();
+  }
 
   /// 1. Save a Single Transaction (From Live Stream)
   Future<void> saveTransaction(TransactionModel txn) async {
     try {
       final db = await DBService().database;
+      Set<String> blacklist = await _getBlacklist(db);
+
+      // Stop if it's blacklisted
+      if (blacklist.contains(txn.hash)) return;
+
       await db.insert(
         Constants.tableTransactions,
         txn.toMap(),
@@ -30,16 +41,16 @@ class SmsService {
   Future<int> syncHistory(
       {Function(int current, int total)? onProgress}) async {
     try {
-      // Fetch raw messages via the bridge (no 'since' implies full 180-day scan)
       final List<dynamic> messages = await _bridge.readSmsHistory();
-
       if (messages.isEmpty) return 0;
 
-      await AIService().loadModel(); // Ensure AI is awake
+      await AIService().loadModel();
+
+      final db = await DBService().database;
+      Set<String> blacklist = await _getBlacklist(db); // [NEW] Get Blacklist
 
       int addedCount = 0;
       int highestTimestamp = 0;
-      final db = await DBService().database;
       Batch batch = db.batch();
 
       for (int i = 0; i < messages.length; i++) {
@@ -52,21 +63,19 @@ class SmsService {
 
         var txn = ParserService.parseSMS(sender, body, timestamp);
 
-        if (txn != null) {
+        // [NEW] Check Blacklist before saving
+        if (txn != null && !blacklist.contains(txn.hash)) {
           batch.insert(Constants.tableTransactions, txn.toMap(),
               conflictAlgorithm: ConflictAlgorithm.ignore);
           addedCount++;
         }
 
-        // Update UI every 5 messages
-        if (onProgress != null && i % 5 == 0) {
+        if (onProgress != null && i % 5 == 0)
           onProgress(i + 1, messages.length);
-        }
       }
 
       await batch.commit(noResult: true);
 
-      // Save the timestamp so silent sync knows where to start next time
       if (highestTimestamp > 0) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('last_sync_timestamp', highestTimestamp);
@@ -84,20 +93,19 @@ class SmsService {
   Future<void> silentBackgroundSync() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      // Default to 180 days ago if never synced
       int lastSync = prefs.getInt('last_sync_timestamp') ??
           DateTime.now()
               .subtract(const Duration(days: 180))
               .millisecondsSinceEpoch;
 
-      // Ask bridge ONLY for messages newer than lastSync
       final List<dynamic> messages =
           await _bridge.readSmsHistory(since: lastSync);
-
       if (messages.isEmpty) return;
 
       await AIService().loadModel();
       final db = await DBService().database;
+      Set<String> blacklist = await _getBlacklist(db); // [NEW] Get Blacklist
+
       Batch batch = db.batch();
       int highestTimestamp = lastSync;
 
@@ -107,7 +115,9 @@ class SmsService {
 
         var txn = ParserService.parseSMS(
             msg['sender'] ?? '', msg['body'] ?? '', timestamp);
-        if (txn != null) {
+
+        // [NEW] Check Blacklist before saving
+        if (txn != null && !blacklist.contains(txn.hash)) {
           batch.insert(Constants.tableTransactions, txn.toMap(),
               conflictAlgorithm: ConflictAlgorithm.ignore);
         }
@@ -115,7 +125,7 @@ class SmsService {
 
       await batch.commit(noResult: true);
       await prefs.setInt('last_sync_timestamp', highestTimestamp);
-      print("⚡ Silent Sync: Added ${messages.length} new background messages.");
+      print("⚡ Silent Sync: Added new background messages.");
     } catch (e) {
       print("❌ Silent Sync Error: $e");
     }
@@ -125,7 +135,6 @@ class SmsService {
   Future<void> processBackgroundCache() async {
     try {
       final String? jsonString = await _bridge.getAndClearBackgroundCache();
-
       if (jsonString == null || jsonString == "[]") return;
 
       List<dynamic> cachedMessages = jsonDecode(jsonString);
@@ -133,12 +142,16 @@ class SmsService {
 
       await AIService().loadModel();
       final db = await DBService().database;
+      Set<String> blacklist = await _getBlacklist(db); // [NEW] Get Blacklist
+
       Batch batch = db.batch();
 
       for (var msg in cachedMessages) {
         var txn = ParserService.parseSMS(
             msg['sender'] ?? '', msg['body'] ?? '', msg['timestamp'] ?? 0);
-        if (txn != null) {
+
+        // [NEW] Check Blacklist before saving
+        if (txn != null && !blacklist.contains(txn.hash)) {
           batch.insert(Constants.tableTransactions, txn.toMap(),
               conflictAlgorithm: ConflictAlgorithm.ignore);
         }
