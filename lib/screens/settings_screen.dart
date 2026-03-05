@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // <--- ADDED
 import '../services/auth_service.dart';
 import '../services/db_service.dart';
 import '../utils/constants.dart';
 import 'verification_screen.dart';
+import 'debug_parser_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,6 +17,32 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final AuthService _auth = AuthService();
 
+  // [NEW] State for our duplicate preference
+  bool _autoDropDuplicates = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  //[NEW] Load preference on screen start
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _autoDropDuplicates = (prefs.getString('dedupe_rule') == 'auto_drop');
+    });
+  }
+
+  // [NEW] Save preference when toggled
+  Future<void> _toggleDedupe(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('dedupe_rule', value ? 'auto_drop' : 'ask');
+    setState(() {
+      _autoDropDuplicates = value;
+    });
+  }
+
   // --- LOGOUT LOGIC ---
   void _logout() {
     Navigator.of(context).pushAndRemoveUntil(
@@ -23,9 +51,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // --- KILL SWITCH LOGIC (The Fix) ---
+  // --- KILL SWITCH LOGIC ---
   Future<void> _triggerKillSwitch() async {
-    // 1. Authenticate (Safety Check)
     bool auth = await _auth.authenticateBiometric();
     if (!auth) {
       if (mounted) {
@@ -35,7 +62,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
 
-    // 2. Show "Wiping..." Dialog
     if (mounted) {
       showDialog(
         context: context,
@@ -46,34 +72,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     try {
-      // 3. NUCLEAR WIPE
-      // Close & Delete Database
       await DBService().deleteDB();
-
-      // Delete Profile, Keys, and Settings
       await _auth.nuclearWipe();
-
-      // Artificial delay to ensure disk operations finish
       await Future.delayed(const Duration(seconds: 2));
 
-      // 4. RESET APP (Don't close it, just restart navigation)
       if (mounted) {
-        // Remove loading dialog
         Navigator.of(context).pop();
-
-        // Navigate to Start (Verification Screen)
-        // Since data is gone, this screen will now show "Setup Vault"
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const VerificationScreen()),
           (route) => false,
         );
-
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("♻ System Reset Complete")));
       }
     } catch (e) {
       if (mounted) {
-        Navigator.of(context).pop(); // Close dialog
+        Navigator.of(context).pop();
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text("Wipe Failed: $e")));
       }
@@ -88,10 +102,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: const Text("Security Settings"),
         backgroundColor: Constants.colorSurface,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
+            // 1. LOGOUT TILE
             ListTile(
               tileColor: Constants.colorSurface,
               leading: const Icon(Icons.lock, color: Colors.white),
@@ -101,13 +116,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
+
+            const SizedBox(height: 20),
+
+            // 2. DEBUG PARSER TILE
+            ListTile(
+              tileColor: Constants.colorSurface,
+              leading: const Icon(Icons.bug_report, color: Colors.orange),
+              title: const Text("Debug SMS Parser",
+                  style: TextStyle(color: Colors.white)),
+              subtitle: const Text("Test AI & Extraction logic",
+                  style: TextStyle(color: Colors.grey)),
+              onTap: () {
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const DebugParserScreen()));
+              },
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+
+            const SizedBox(height: 20),
+
+            // 3. [NEW] AUTO-DROP TOGGLE
+            SwitchListTile(
+              activeColor: Constants.colorPrimary,
+              tileColor: Constants.colorSurface,
+              title: const Text("Auto-Drop Duplicates",
+                  style: TextStyle(color: Colors.white)),
+              subtitle: const Text(
+                  "Silently ignore duplicate SMS/Notifications",
+                  style: TextStyle(color: Colors.grey, fontSize: 12)),
+              value: _autoDropDuplicates,
+              onChanged: _toggleDedupe,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+
             const SizedBox(height: 40),
+
+            // 4. DANGER ZONE
             const Text("DANGER ZONE",
                 style: TextStyle(
                     color: Colors.red,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1.2)),
             const SizedBox(height: 10),
+
+            // 5. KILL SWITCH
             Container(
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.red.withOpacity(0.5)),

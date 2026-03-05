@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // <--- ADDED: Required for MethodChannel
+import 'package:shared_preferences/shared_preferences.dart'; // <-- Added here
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:intl/intl.dart';
 import '../services/sms_service.dart';
 import '../services/prediction_service.dart';
 import '../models/transaction_model.dart';
 import '../utils/constants.dart';
-import '../widgets/sync_overlay.dart'; // Correctly import the overlay
 import 'transaction_detail_screen.dart';
 import 'settings_screen.dart';
 import 'visual_report_screen.dart';
@@ -19,6 +20,7 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
+// Helper to ask for SMS permissions
 Future<void> requestSmsPermissions() async {
   Map<Permission, PermissionStatus> statuses = await [
     Permission.sms,
@@ -28,7 +30,6 @@ Future<void> requestSmsPermissions() async {
     print("✅ SMS Permission Granted");
   } else {
     print("❌ SMS Permission Denied");
-    // Show a dialog explaining why you need it for CipherSpend to work
   }
 }
 
@@ -36,25 +37,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final SmsService _smsService = SmsService();
   final PredictionService _predictionService = PredictionService();
 
+  // Native Bridge to talk to MainActivity.kt
+  static const platform = MethodChannel('com.example.cipherspend/sms');
+
   List<TransactionModel> _transactions = [];
 
-  // [FIXED] Added the missing toggle state for the prediction card
-  bool _showNextMonth = false;
-
-  // [FIXED] Changed to dynamic to match the new PredictionService map
   Map<String, dynamic> _forecast = {
     "budget": 1.0,
     "spent": 0.0,
     "projected": 0.0,
-    "next_month_projected": 0.0
+    "next_month_projected": 0.0,
+    "top_category": "None",
+    "top_category_amount": 0.0
   };
 
-  // --- Week 3 Sync States ---
   DateTime _selectedMonth = DateTime.now();
   bool _isLoading = true;
-  bool _isSyncing = false;
-  int _totalToSync = 0;
-  int _currentSynced = 0;
 
   @override
   void initState() {
@@ -63,28 +61,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _listenToLiveSMS();
   }
 
-  /// Integrated Load & Sync with Progress Tracking
+  // [NEW] Open Android Notification Settings
+  Future<void> _openNotificationSettings() async {
+    try {
+      await platform.invokeMethod('openNotificationSettings');
+    } catch (e) {
+      print("Failed to open settings: $e");
+    }
+  }
+
   Future<void> _loadData() async {
     if (!mounted) return;
     setState(() {
       _isLoading = true;
-      _isSyncing = true; // Show Overlay
     });
 
-    // 1. Sync Historical Data (Passes progress callback to SmsService)
-    await _smsService.syncHistory(onProgress: (current, total) {
-      if (mounted) {
-        setState(() {
-          _currentSynced = current;
-          _totalToSync = total;
-        });
-      }
-    });
+    // 1. DELTA SYNC: Catch up on missed messages (SMS + Notifications from Cache)
+    await _smsService.silentBackgroundSync();
 
-    // 2. Fetch Data for SELECTED Month
+    // 2. Fetch Data
     final list = await _smsService.getTransactionsByMonth(_selectedMonth);
-
-    // 3. Calculate Intelligence Forecast
     final forecastData =
         await _predictionService.getForecastForMonth(_selectedMonth);
 
@@ -92,7 +88,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() {
         _transactions = list;
         _forecast = forecastData;
-        _isSyncing = false; // Hide Overlay
         _isLoading = false;
       });
     }
@@ -101,82 +96,305 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _listenToLiveSMS() {
     _smsService.liveTransactionStream.listen((txn) async {
       if (txn != null) {
-        await _smsService.saveTransaction(txn);
-        if (_selectedMonth.month == DateTime.now().month &&
-            _selectedMonth.year == DateTime.now().year) {
-          _loadData(); // Refresh UI for new transaction
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text("New Transaction: ₹${txn.amount}"),
-                backgroundColor: Constants.colorPrimary,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
+        bool isDuplicate = await _smsService.existsSimilarTransaction(txn);
+
+        if (isDuplicate) {
+          // Check user's global preference
+          final prefs = await SharedPreferences.getInstance();
+          String dedupeRule =
+              prefs.getString('dedupe_rule') ?? 'ask'; // 'ask', 'auto_drop'
+
+          if (dedupeRule == 'auto_drop') {
+            print(
+                "Silently dropped duplicate ₹${txn.amount} from ${txn.sender}");
+            // Do nothing, drop it
+          } else {
+            // Ask the user case-by-case
+            if (mounted) {
+              _showDuplicateDialog(txn);
+            }
           }
+        } else {
+          await _smsService.saveTransaction(txn);
+          _refreshIfCurrentMonth(txn);
         }
       }
     });
   }
 
-  void _changeMonth(int monthsToAdd) {
-    setState(() {
-      _selectedMonth =
-          DateTime(_selectedMonth.year, _selectedMonth.month + monthsToAdd, 1);
-    });
-    _loadData();
+  void _refreshIfCurrentMonth(TransactionModel txn) {
+    if (_selectedMonth.month == DateTime.now().month &&
+        _selectedMonth.year == DateTime.now().year) {
+      _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("New Transaction: ₹${txn.amount}"),
+            backgroundColor: Constants.colorPrimary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    String monthName = DateFormat('MMMM yyyy').format(_selectedMonth);
-
-    return Scaffold(
-      backgroundColor: Constants.colorBackground,
-      appBar: AppBar(
-        title: const Text("CipherSpend"),
+  void _showDuplicateDialog(TransactionModel txn) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
         backgroundColor: Constants.colorSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.copy, color: Colors.orange),
+            SizedBox(width: 10),
+            Text("Duplicate Detected", style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: Text(
+          "We found a similar transaction of ₹${txn.amount} from ${txn.merchant}.\n\n"
+          "This might be the same SMS/Notification detected again. Do you want to add it anyway?",
+          style: const TextStyle(color: Colors.white70),
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-            tooltip: "Force AI Sync",
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("IGNORE", style: TextStyle(color: Colors.grey)),
           ),
-          IconButton(
-            icon: const Icon(Icons.bar_chart, color: Constants.colorPrimary),
-            tooltip: "View Flow Chart",
-            onPressed: () {
-              Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => VisualReportScreen(
-                            transactions: _transactions,
-                            budget: _forecast['budget'] ?? 0.0,
-                          )));
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Constants.colorPrimary,
+                foregroundColor: Colors.black),
+            onPressed: () async {
+              Navigator.pop(context);
+              await _smsService.saveTransaction(txn);
+              _refreshIfCurrentMonth(txn);
             },
+            child: const Text("ADD ANYWAY"),
           ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen())),
+        ],
+      ),
+    );
+  }
+
+  void _showPredictionDialog() {
+    double projected = _forecast['projected'] ?? 0;
+    double nextMonth = _forecast['next_month_projected'] ?? 0;
+    double budget = _forecast['budget'] ?? 1;
+    String topCategory = _forecast['top_category'] ?? "None";
+    double topAmount = _forecast['top_category_amount'] ?? 0.0;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Constants.colorSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.insights, color: Constants.colorPrimary),
+            SizedBox(width: 10),
+            Text("Financial Forecast", style: TextStyle(color: Colors.white)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildDialogRow(
+                "Highest Spend:",
+                "$topCategory (₹${topAmount.toStringAsFixed(0)})",
+                Colors.redAccent),
+            const Divider(color: Colors.white24),
+            _buildDialogRow(
+                "End of Month Est:",
+                "₹${projected.toStringAsFixed(0)}",
+                projected > budget ? Colors.red : Constants.colorPrimary),
+            const SizedBox(height: 10),
+            _buildDialogRow("Next Month Est:",
+                "₹${nextMonth.toStringAsFixed(0)}", Colors.blueAccent),
+            const SizedBox(height: 15),
+            Text(
+              nextMonth > budget
+                  ? "⚠ Projection: Based on your average daily spend, you may exceed your budget next month."
+                  : "✅ Projection: You are on track to stay within budget next month.",
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            )
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("CLOSE",
+                style: TextStyle(color: Constants.colorPrimary)),
           )
         ],
       ),
-      body: Stack(
-        // Stack allows the Overlay to float over the UI
+    );
+  }
+
+  Widget _buildDialogRow(String label, String value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // 1. MAIN UI LAYER
-          Column(
+          Text(label, style: const TextStyle(color: Colors.white70)),
+          Text(value,
+              style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPredictionCard() {
+    double spent = _forecast['spent'] ?? 0;
+    double budget = _forecast['budget'] ?? 1;
+    String topCategory = _forecast['top_category'] ?? "None";
+
+    bool isOverBudget = spent > budget;
+    double progress = (budget > 0) ? (spent / budget).clamp(0.0, 1.0) : 0.0;
+    Color statusColor =
+        isOverBudget ? Colors.redAccent : Constants.colorPrimary;
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+          color: Constants.colorSurface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.05)),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 4))
+          ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMonthSelector(monthName),
-              _buildPredictionCard(),
-              _buildTransactionList(),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("TOTAL SPENT",
+                      style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 10,
+                          letterSpacing: 1.5)),
+                  const SizedBox(height: 4),
+                  Text("₹${spent.toStringAsFixed(0)}",
+                      style: TextStyle(
+                          color: statusColor,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold)),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Text("MONTHLY BUDGET",
+                      style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 10,
+                          letterSpacing: 1.5)),
+                  const SizedBox(height: 4),
+                  Text("₹${budget.toStringAsFixed(0)}",
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
+                ],
+              ),
             ],
           ),
-
-          // 2. OVERLAY LAYER (Only visible during sync)
-          if (_isSyncing && _totalToSync > 0)
-            SyncOverlay(total: _totalToSync, current: _currentSynced),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: Colors.black26,
+              color: statusColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                isOverBudget
+                    ? "⚠️ Budget Exceeded"
+                    : "${(progress * 100).toStringAsFixed(0)}% Used",
+                style: TextStyle(
+                    color: statusColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold),
+              ),
+              Text(
+                "Remaining: ₹${(budget - spent).toStringAsFixed(0)}",
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Divider(color: Colors.white.withOpacity(0.1)),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                    color: Colors.redAccent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border:
+                        Border.all(color: Colors.redAccent.withOpacity(0.3))),
+                child: Row(
+                  children: [
+                    const Icon(Icons.trending_up,
+                        color: Colors.redAccent, size: 14),
+                    const SizedBox(width: 6),
+                    Text(
+                      "Most Spent: $topCategory",
+                      style: const TextStyle(
+                          color: Colors.redAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+              InkWell(
+                onTap: _showPredictionDialog,
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                      color: Constants.colorPrimary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: Constants.colorPrimary.withOpacity(0.3))),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.insights,
+                          color: Constants.colorPrimary, size: 14),
+                      SizedBox(width: 6),
+                      Text("View Projection",
+                          style: TextStyle(
+                              color: Constants.colorPrimary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          )
         ],
       ),
     );
@@ -205,145 +423,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildPredictionCard() {
-    double spent = _forecast['spent'] ?? 0;
-    double projected = _forecast['projected'] ?? 0;
-    double nextMonthProjected = _forecast['next_month_projected'] ?? 0;
-    double budget = _forecast['budget'] ?? 1;
-
-    bool isCurrentMonth = _selectedMonth.month == DateTime.now().month &&
-        _selectedMonth.year == DateTime.now().year;
-    bool isDanger = projected > budget;
-    double progress = (budget > 0) ? (spent / budget).clamp(0.0, 1.0) : 0.0;
-
-    // Dynamic UI based on toggle
-    String rightLabel;
-    String rightValue;
-    Color rightColor;
-
-    if (isCurrentMonth) {
-      if (_showNextMonth) {
-        rightLabel = "NEXT MTH (PROJ)";
-        rightValue = "₹${nextMonthProjected.toStringAsFixed(0)}";
-        rightColor = Colors.orangeAccent; // Distinct color for next month
-      } else {
-        rightLabel = "PROJECTED";
-        rightValue = "₹${projected.toStringAsFixed(0)}";
-        rightColor = isDanger ? Colors.redAccent : Constants.colorPrimary;
-      }
-    } else {
-      rightLabel = "BUDGET";
-      rightValue = "₹${budget.toStringAsFixed(0)}";
-      rightColor = Constants.colorPrimary;
-    }
-
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Constants.colorSurface,
-        borderRadius: BorderRadius.circular(16),
-        border: isDanger && !_showNextMonth && isCurrentMonth
-            ? Border.all(color: Colors.red.withOpacity(0.5), width: 2)
-            : null,
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildStatColumn(
-                  "SPENT", "₹${spent.toStringAsFixed(0)}", Colors.white),
-
-              // [NEW] Clickable Projection Column
-              GestureDetector(
-                onTap: isCurrentMonth
-                    ? () {
-                        setState(() {
-                          _showNextMonth = !_showNextMonth;
-                        });
-                      }
-                    : null,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: isCurrentMonth
-                      ? BoxDecoration(
-                          color: Colors.white.withOpacity(
-                              0.05), // Subtle highlight to show it's clickable
-                          borderRadius: BorderRadius.circular(8),
-                        )
-                      : null,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildStatColumn(rightLabel, rightValue, rightColor),
-                      if (isCurrentMonth) ...[
-                        const SizedBox(width: 6),
-                        Icon(Icons.touch_app,
-                            size: 16, color: Colors.grey.withOpacity(0.6))
-                      ]
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
-              backgroundColor: Colors.black26,
-              color: isDanger ? Colors.redAccent : Constants.colorPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          // [NEW] Clear budget context at the bottom
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text("₹0",
-                  style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold)),
-              Text("BUDGET: ₹${budget.toStringAsFixed(0)}",
-                  style: const TextStyle(
-                      color: Colors.grey,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold)),
-            ],
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatColumn(String label, String value, Color valueColor) {
-    return Column(
-      crossAxisAlignment:
-          label == "SPENT" ? CrossAxisAlignment.start : CrossAxisAlignment.end,
-      children: [
-        Text(label,
-            style: const TextStyle(
-                color: Colors.grey, fontSize: 10, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        Text(value,
-            style: TextStyle(
-                color: valueColor, fontSize: 24, fontWeight: FontWeight.bold)),
-      ],
-    );
+  void _changeMonth(int monthsToAdd) {
+    setState(() {
+      _selectedMonth =
+          DateTime(_selectedMonth.year, _selectedMonth.month + monthsToAdd, 1);
+    });
+    _loadData();
   }
 
   Widget _buildTransactionList() {
     return Expanded(
-      child: _isLoading && !_isSyncing
+      child: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: Constants.colorPrimary))
           : _transactions.isEmpty
-              ? _buildEmptyState() // [NEW] Cyberpunk Empty State
+              ? _buildEmptyState()
               : ListView.builder(
                   itemCount: _transactions.length,
                   itemBuilder: (context, index) =>
@@ -352,7 +446,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // [NEW] Themed Empty State
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -376,7 +469,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // [UPDATED] Swipe-to-delete Dismissible Wrapper (Fixed Async Gap)
   Widget _buildTransactionItem(TransactionModel txn) {
     final date = DateTime.fromMillisecondsSinceEpoch(txn.timestamp);
 
@@ -384,7 +476,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Dismissible(
         key: Key(txn.hash),
-        direction: DismissDirection.endToStart, // Swipe left to delete
+        direction: DismissDirection.endToStart,
         background: Container(
           alignment: Alignment.centerRight,
           padding: const EdgeInsets.only(right: 20),
@@ -395,32 +487,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: const Icon(Icons.delete_sweep, color: Colors.white, size: 30),
         ),
         onDismissed: (direction) async {
-          // 1. INSTANTLY remove it from the local UI list
           setState(() {
             _transactions.removeWhere((item) => item.hash == txn.hash);
           });
 
           final db = await DBService().database;
-
-          // 2. [NEW] Add to Blacklist so the AI ignores it forever
           await db.insert('ignored_hashes', {'hash': txn.hash},
               conflictAlgorithm: ConflictAlgorithm.ignore);
-
-          // 3. Delete from active transactions
           await db.delete(Constants.tableTransactions,
               where: 'hash = ?', whereArgs: [txn.hash]);
-
           _loadData();
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Data purged & Blacklisted."),
-                backgroundColor: Colors.red,
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          }
         },
         child: Card(
           color: Constants.colorSurface,
@@ -457,7 +533,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- UPDATED CATEGORY MAPPINGS ---
   Color _getCategoryColor(String cat) {
     String lowerCat = cat.toLowerCase();
     if (lowerCat.contains('food')) return Colors.green;
@@ -482,5 +557,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (lowerCat.contains('investment')) return Icons.trending_up;
     if (lowerCat.contains('transaction')) return Icons.swap_horiz;
     return Icons.payment;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    String monthName = DateFormat('MMMM yyyy').format(_selectedMonth);
+
+    return Scaffold(
+      backgroundColor: Constants.colorBackground,
+      appBar: AppBar(
+        title: const Text("CipherSpend"),
+        backgroundColor: Constants.colorSurface,
+        actions: [
+          // [NEW] Hybrid Engine Trigger
+          IconButton(
+            icon: const Icon(Icons.notifications_active, color: Colors.amber),
+            tooltip: "Enable Notification Listener",
+            onPressed: _openNotificationSettings,
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadData,
+          ),
+          IconButton(
+            icon: const Icon(Icons.bar_chart, color: Constants.colorPrimary),
+            onPressed: () {
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => VisualReportScreen(
+                            transactions: _transactions,
+                            budget: _forecast['budget'] ?? 0.0,
+                          )));
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen())),
+          )
+        ],
+      ),
+      body: Column(
+        children: [
+          _buildMonthSelector(monthName),
+          _buildPredictionCard(),
+          _buildTransactionList(),
+        ],
+      ),
+    );
   }
 }

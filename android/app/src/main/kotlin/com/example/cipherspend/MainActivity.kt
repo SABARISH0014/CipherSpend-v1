@@ -4,8 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.database.Cursor
-import android.net.Uri
+import android.database.Cursor       // <--- RESTORED
+import android.net.Uri             // <--- RESTORED
+import android.provider.Settings   // <--- RESTORED
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -20,7 +21,6 @@ import java.util.ArrayList
 import java.util.HashMap
 
 class MainActivity: FlutterFragmentActivity() {
-    // Matched to the Dart VerificationScreen Channel
     private val METHOD_CHANNEL = "com.example.cipherspend/sms"
     private val EVENT_CHANNEL = "com.cipherspend/sms_stream"
     private var smsReceiver: BroadcastReceiver? = null
@@ -30,7 +30,7 @@ class MainActivity: FlutterFragmentActivity() {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
-                // 1. The Real Verification Loopback Process
+                // 1. Loopback Verification
                 "verifyLoopbackSms" -> {
                     val phone = call.argument<String>("phone")
                     if (phone != null) {
@@ -40,7 +40,7 @@ class MainActivity: FlutterFragmentActivity() {
                     }
                 }
                 
-                // --- [CHANGED] 2. Original Historical Sync (Now accepts 'since' timestamp) ---
+                // 2. Historical Sync
                 "readSmsHistory" -> {
                     val sinceTimestamp = call.argument<Long>("since") ?: (System.currentTimeMillis() - (180L * 24 * 60 * 60 * 1000))
                     Thread {
@@ -49,21 +49,39 @@ class MainActivity: FlutterFragmentActivity() {
                     }.start()
                 }
 
-                // --- [NEW] 3. Background Cache Retrieval ---
+                // 3. Background Cache Retrieval
                 "getAndClearBackgroundCache" -> {
                     val prefs = getSharedPreferences("CipherSmsCache", Context.MODE_PRIVATE)
                     val cachedData = prefs.getString("pending_sms", "[]")
-                    
-                    // Clear the cache immediately so we don't process them twice
                     prefs.edit().remove("pending_sms").apply()
-
                     result.success(cachedData)
                 }
+
+                // 4. Open Notification Settings
+                "openNotificationSettings" -> {
+                    try {
+                        val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("UNAVAILABLE", "Could not open settings", null)
+                    }
+                }
+
+                // 5. Check if Permission is Granted
+                "isNotificationListenerEnabled" -> {
+                    val packageName = packageName
+                    val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+                    val enabled = flat != null && flat.contains(packageName)
+                    result.success(enabled)
+                }
+
                 else -> result.notImplemented()
             }
         }
 
-        // Live SMS Stream
+        // Live SMS Stream Logic
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL).setStreamHandler(
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -81,7 +99,6 @@ class MainActivity: FlutterFragmentActivity() {
         val verifyPhrase = "CIPHER_VERIFY" // Secret phrase to detect
         var isVerified = false
 
-        // 1. Setup a temporary receiver to listen for this exact message
         val tempReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 if (intent.action == "android.provider.Telephony.SMS_RECEIVED") {
@@ -93,7 +110,6 @@ class MainActivity: FlutterFragmentActivity() {
                         val msg = SmsMessage.createFromPdu(pdu as ByteArray, format)
                         
                         if (msg.messageBody?.contains(verifyPhrase) == true) {
-                            // Match Found!
                             isVerified = true
                             context.unregisterReceiver(this)
                             result.success(true)
@@ -104,7 +120,6 @@ class MainActivity: FlutterFragmentActivity() {
             }
         }
 
-        // 2. Register the temporary receiver safely for Android 14+
         val filter = IntentFilter("android.provider.Telephony.SMS_RECEIVED")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(tempReceiver, filter, Context.RECEIVER_EXPORTED)
@@ -112,23 +127,18 @@ class MainActivity: FlutterFragmentActivity() {
             registerReceiver(tempReceiver, filter)
         }
 
-        // 3. Send the message to the user's own phone
         sendSMS(phone, "Do not share this code. $verifyPhrase")
 
-        // 4. Timeout after 30 Seconds (Prevent infinite loading)
         Handler(Looper.getMainLooper()).postDelayed({
             if (!isVerified) {
                 try {
                     unregisterReceiver(tempReceiver)
-                    result.success(false) // Timed out
-                } catch (e: Exception) {
-                    // Receiver might already be unregistered, ignore
-                }
+                    result.success(false) 
+                } catch (e: Exception) {}
             }
         }, 30000)
     }
 
-    // --- SMS SENDING UTILITY ---
     private fun sendSMS(phone: String?, message: String?) {
         if (phone == null || message == null) return
         try {
@@ -144,7 +154,6 @@ class MainActivity: FlutterFragmentActivity() {
         }
     }
 
-    // --- LIVE SMS LISTENER (Dashboard) ---
     private fun registerSmsReceiver(events: EventChannel.EventSink?) {
         smsReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -166,7 +175,6 @@ class MainActivity: FlutterFragmentActivity() {
             }
         }
         
-        // Register safely for Android 14+
         val filter = IntentFilter("android.provider.Telephony.SMS_RECEIVED")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(smsReceiver, filter, Context.RECEIVER_EXPORTED)
@@ -182,14 +190,14 @@ class MainActivity: FlutterFragmentActivity() {
         }
     }
 
-    // --- [CHANGED] HISTORICAL SCANNER (Accepts dynamic timestamp and sorts ASC) ---
+    // --- HISTORICAL SCANNER ---
     private fun readSmsInbox(sinceTimestamp: Long): List<Map<String, Any>> {
         val messages = ArrayList<Map<String, Any>>()
         val uri = Uri.parse("content://sms/inbox")
         val projection = arrayOf("body", "address", "date")
         val selection = "date > ?"
         val selectionArgs = arrayOf(sinceTimestamp.toString())
-        val sortOrder = "date ASC" // Parse oldest missing messages first
+        val sortOrder = "date ASC" 
 
         try {
             val cursor: Cursor? = contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
