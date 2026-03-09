@@ -12,31 +12,63 @@ class SmsService {
   final SmsBridge _bridge = SmsBridge();
 
   Future<Set<String>> _getBlacklist(Database db) async {
-    final List<Map<String, dynamic>> ignoredData =
-        await db.query('ignored_hashes');
+    final List<Map<String, dynamic>> ignoredData = await db.query(
+      'ignored_hashes',
+    );
     return ignoredData.map((e) => e['hash'] as String).toSet();
   }
 
-  // --- [UPDATED] CROSS-SOURCE DUPLICATE CHECK ---
+  // --- [UPDATED] ULTIMATE DUPLICATE CHECK ---
   Future<bool> existsSimilarTransaction(TransactionModel txn) async {
     final db = await DBService().database;
 
-    // 5 minutes buffer (300,000 milliseconds)
-    // Shortened from 15 mins to prevent false positives (e.g., buying two ₹50 coffees back-to-back)
-    int timeBuffer = 300000;
+    // 1. EXACT Body Match within 3 Days (Fixes delayed network duplicates)
+    int dayBuffer = 259200000; // 3 days in ms
+    int startDay = txn.timestamp - dayBuffer;
+    int endDay = txn.timestamp + dayBuffer;
+
+    var exactBodyResult = await db.rawQuery(
+      '''
+      SELECT COUNT(*) as count 
+      FROM ${Constants.tableTransactions} 
+      WHERE body = ? AND timestamp >= ? AND timestamp <= ?
+    ''',
+      [txn.body, startDay, endDay],
+    );
+
+    if ((Sqflite.firstIntValue(exactBodyResult) ?? 0) > 0) return true;
+
+    // 2. SAME AMOUNT & MERCHANT within 3 Days (Fixes SMS vs App Notif overlap)
+    if (txn.merchant != "Unknown" && txn.merchant != "Unknown Merchant") {
+      var sameMerchantResult = await db.rawQuery(
+        '''
+        SELECT COUNT(*) as count 
+        FROM ${Constants.tableTransactions} 
+        WHERE amount = ? AND merchant = ? 
+        AND timestamp >= ? AND timestamp <= ?
+      ''',
+        [txn.amount, txn.merchant, startDay, endDay],
+      );
+
+      if ((Sqflite.firstIntValue(sameMerchantResult) ?? 0) > 0) return true;
+    }
+
+    // 3. FUZZY Match (Just Amount) within 60 minutes
+    int timeBuffer = 3600000; // 60 minutes
     int start = txn.timestamp - timeBuffer;
     int end = txn.timestamp + timeBuffer;
 
-    // Notice we REMOVED the "sender = ?" check.
-    // Now, if GPay reports ₹500 and HDFC reports ₹500 within 5 mins, it flags as duplicate.
-    final result = await db.rawQuery('''
+    final fuzzyResult = await db.rawQuery(
+      '''
       SELECT COUNT(*) as count 
       FROM ${Constants.tableTransactions} 
       WHERE amount = ? 
       AND timestamp >= ? AND timestamp <= ?
-    ''', [txn.amount, start, end]);
+    ''',
+      [txn.amount, start, end],
+    );
 
-    int count = Sqflite.firstIntValue(result) ?? 0;
+    int count = Sqflite.firstIntValue(fuzzyResult) ?? 0;
     return count > 0;
   }
 
@@ -61,70 +93,124 @@ class SmsService {
     }
   }
 
-  // --- 2. SILENT BACKGROUND SYNC (Updated) ---
+  // --- SMART PROMPT HELPER ---
+  // Checks if the background engine already caught a transaction in the last X minutes
+  Future<bool> hasRecentTransaction(int minutes) async {
+    final db = await DBService().database;
+    int threshold =
+        DateTime.now().millisecondsSinceEpoch - (minutes * 60 * 1000);
+    var result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM ${Constants.tableTransactions} WHERE timestamp > ?',
+      [threshold],
+    );
+    return (Sqflite.firstIntValue(result) ?? 0) > 0;
+  }
+
+  // --- SILENT BACKGROUND SYNC ---
   Future<void> silentBackgroundSync() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      int lastSync = prefs.getInt('last_sync_timestamp') ??
+      int lastSync =
+          prefs.getInt('last_sync_timestamp') ??
           DateTime.now()
               .subtract(const Duration(days: 180))
               .millisecondsSinceEpoch;
 
-      final List<dynamic> messages =
-          await _bridge.readSmsHistory(since: lastSync);
+      final List<dynamic> messages = await _bridge.readSmsHistory(
+        since: lastSync,
+      );
+      final String? cachedJson = await _bridge.getAndClearBackgroundCache();
+
+      if (cachedJson != null && cachedJson != "[]") {
+        try {
+          List<dynamic> cachedMsgs = jsonDecode(cachedJson);
+          messages.addAll(cachedMsgs);
+        } catch (e) {
+          print("Error decoding cache: $e");
+        }
+      }
+
       if (messages.isEmpty) return;
 
       await AIService().loadModel();
       final db = await DBService().database;
       Set<String> blacklist = await _getBlacklist(db);
 
-      Batch batch = db.batch();
       int highestTimestamp = lastSync;
+      List<Map<String, dynamic>> sessionCache = [];
 
       for (var msg in messages) {
         int timestamp = msg['timestamp'] ?? 0;
         if (timestamp > highestTimestamp) highestTimestamp = timestamp;
 
         var txn = ParserService.parseSMS(
-            msg['sender'] ?? '', msg['body'] ?? '', timestamp);
+          msg['sender'] ?? '',
+          msg['body'] ?? '',
+          timestamp,
+        );
 
         if (txn != null && !blacklist.contains(txn.hash)) {
-          // [NEW] Check for fuzzy duplicates before adding to batch
-          bool isDuplicate = await existsSimilarTransaction(txn);
-          if (!isDuplicate) {
-            batch.insert(Constants.tableTransactions, txn.toMap(),
-                conflictAlgorithm: ConflictAlgorithm.ignore);
-          } else {
-            print("🚫 Skipped duplicate in background: ${txn.body}");
+          bool isDuplicateInDb = await existsSimilarTransaction(txn);
+          bool isDuplicateInSession = false;
+
+          for (var cached in sessionCache) {
+            bool sameBody = cached['body'] == txn.body;
+            bool sameMerchant =
+                (cached['amount'] == txn.amount) &&
+                (cached['merchant'] == txn.merchant) &&
+                (txn.merchant != 'Unknown' &&
+                    txn.merchant != 'Unknown Merchant') &&
+                ((cached['timestamp'] - txn.timestamp).abs() <
+                    259200000); // 3 days
+            bool sameAmountCloseTime =
+                (cached['amount'] == txn.amount) &&
+                ((cached['timestamp'] - txn.timestamp).abs() <
+                    3600000); // 60 mins
+
+            if (sameBody || sameMerchant || sameAmountCloseTime) {
+              isDuplicateInSession = true;
+              break;
+            }
+          }
+
+          if (!isDuplicateInDb && !isDuplicateInSession) {
+            await db.insert(
+              Constants.tableTransactions,
+              txn.toMap(),
+              conflictAlgorithm: ConflictAlgorithm.ignore,
+            );
+            // [FIX] Added merchant to session cache memory
+            sessionCache.add({
+              'body': txn.body,
+              'amount': txn.amount,
+              'merchant': txn.merchant,
+              'timestamp': txn.timestamp,
+            });
           }
         }
       }
 
-      await batch.commit(noResult: true);
       await prefs.setInt('last_sync_timestamp', highestTimestamp);
-      print("⚡ Silent Sync Complete.");
     } catch (e) {
       print("❌ Silent Sync Error: $e");
     }
   }
 
-  // --- 3. MANUAL SYNC (Updated) ---
-  Future<int> syncHistory(
-      {Function(int current, int total)? onProgress}) async {
+  // --- MANUAL SYNC ---
+  Future<int> syncHistory({
+    Function(int current, int total)? onProgress,
+  }) async {
     try {
       final List<dynamic> messages = await _bridge.readSmsHistory();
       if (messages.isEmpty) return 0;
 
       await AIService().loadModel();
-
       final db = await DBService().database;
       Set<String> blacklist = await _getBlacklist(db);
 
       int addedCount = 0;
       int highestTimestamp = 0;
-      // We cannot use Batch here effectively because we need to await existsSimilarTransaction inside the loop
-      // or we accept that bulk sync might be slower. For accuracy, we check one by one or trust Hash.
-      // Let's rely on Hash for bulk history to keep it fast, but apply fuzzy check for recent ones.
+      List<Map<String, dynamic>> sessionCache = [];
 
       for (int i = 0; i < messages.length; i++) {
         var msg = messages[i];
@@ -132,15 +218,46 @@ class SmsService {
         if (timestamp > highestTimestamp) highestTimestamp = timestamp;
 
         var txn = ParserService.parseSMS(
-            msg['sender'] ?? '', msg['body'] ?? '', timestamp);
+          msg['sender'] ?? '',
+          msg['body'] ?? '',
+          timestamp,
+        );
 
         if (txn != null && !blacklist.contains(txn.hash)) {
-          // Check duplicate
-          bool isDuplicate = await existsSimilarTransaction(txn);
+          bool isDuplicateInDb = await existsSimilarTransaction(txn);
+          bool isDuplicateInSession = false;
 
-          if (!isDuplicate) {
-            await db.insert(Constants.tableTransactions, txn.toMap(),
-                conflictAlgorithm: ConflictAlgorithm.ignore);
+          for (var cached in sessionCache) {
+            bool sameBody = cached['body'] == txn.body;
+            bool sameMerchant =
+                (cached['amount'] == txn.amount) &&
+                (cached['merchant'] == txn.merchant) &&
+                (txn.merchant != 'Unknown' &&
+                    txn.merchant != 'Unknown Merchant') &&
+                ((cached['timestamp'] - txn.timestamp).abs() < 259200000);
+            bool sameAmountCloseTime =
+                (cached['amount'] == txn.amount) &&
+                ((cached['timestamp'] - txn.timestamp).abs() < 3600000);
+
+            if (sameBody || sameMerchant || sameAmountCloseTime) {
+              isDuplicateInSession = true;
+              break;
+            }
+          }
+
+          if (!isDuplicateInDb && !isDuplicateInSession) {
+            await db.insert(
+              Constants.tableTransactions,
+              txn.toMap(),
+              conflictAlgorithm: ConflictAlgorithm.ignore,
+            );
+            // [FIX] Added merchant to session cache memory
+            sessionCache.add({
+              'body': txn.body,
+              'amount': txn.amount,
+              'merchant': txn.merchant,
+              'timestamp': txn.timestamp,
+            });
             addedCount++;
           }
         }
@@ -170,10 +287,11 @@ class SmsService {
     final end = DateTime(month.year, month.month + 1, 1).millisecondsSinceEpoch;
 
     final List<Map<String, dynamic>> maps = await db.query(
-        Constants.tableTransactions,
-        where: 'timestamp >= ? AND timestamp < ?',
-        whereArgs: [start, end],
-        orderBy: "timestamp DESC");
+      Constants.tableTransactions,
+      where: 'timestamp >= ? AND timestamp < ?',
+      whereArgs: [start, end],
+      orderBy: "timestamp DESC",
+    );
 
     return List.generate(maps.length, (i) => TransactionModel.fromMap(maps[i]));
   }
@@ -182,9 +300,10 @@ class SmsService {
     return _bridge.smsStream.map((event) {
       try {
         return ParserService.parseSMS(
-            event['sender'] ?? '',
-            event['body'] ?? '',
-            event['timestamp'] ?? DateTime.now().millisecondsSinceEpoch);
+          event['sender'] ?? '',
+          event['body'] ?? '',
+          event['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,
+        );
       } catch (e) {
         return null;
       }

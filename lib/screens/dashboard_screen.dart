@@ -1,6 +1,7 @@
+import 'package:cipherspend/services/db_service.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // <--- ADDED: Required for MethodChannel
-import 'package:shared_preferences/shared_preferences.dart'; // <-- Added here
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:intl/intl.dart';
 import '../services/sms_service.dart';
@@ -11,7 +12,6 @@ import 'transaction_detail_screen.dart';
 import 'settings_screen.dart';
 import 'visual_report_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../services/db_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -22,9 +22,7 @@ class DashboardScreen extends StatefulWidget {
 
 // Helper to ask for SMS permissions
 Future<void> requestSmsPermissions() async {
-  Map<Permission, PermissionStatus> statuses = await [
-    Permission.sms,
-  ].request();
+  Map<Permission, PermissionStatus> statuses = await [Permission.sms].request();
 
   if (statuses[Permission.sms]!.isGranted) {
     print("✅ SMS Permission Granted");
@@ -33,7 +31,9 @@ Future<void> requestSmsPermissions() async {
   }
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+// [NEW] Added 'with WidgetsBindingObserver' to listen to app background/foreground state
+class _DashboardScreenState extends State<DashboardScreen>
+    with WidgetsBindingObserver {
   final SmsService _smsService = SmsService();
   final PredictionService _predictionService = PredictionService();
 
@@ -48,7 +48,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     "projected": 0.0,
     "next_month_projected": 0.0,
     "top_category": "None",
-    "top_category_amount": 0.0
+    "top_category_amount": 0.0,
   };
 
   DateTime _selectedMonth = DateTime.now();
@@ -57,11 +57,167 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(
+      this,
+    ); // [NEW] Start listening to lifecycle
     _loadData();
     _listenToLiveSMS();
   }
 
-  // [NEW] Open Android Notification Settings
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(
+      this,
+    ); // [NEW] Stop listening on close
+    super.dispose();
+  }
+
+  // [NEW] Triggered every time the user comes back to the app
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadData(); // Sync any background messages
+      _checkSmartPrompt(); // Ask Android if they just used a payment app
+    }
+  }
+
+  // [NEW] Logic to check App Usage Stats and prompt user
+  Future<void> _checkSmartPrompt() async {
+    final prefs = await SharedPreferences.getInstance();
+    bool isSmartPromptEnabled = prefs.getBool('smart_prompt_enabled') ?? false;
+    if (!isSmartPromptEnabled) return;
+
+    try {
+      // 1. Check if user gave Android permission
+      bool hasAccess = await platform.invokeMethod('hasUsageAccess');
+      if (!hasAccess) return;
+
+      // 2. Ask Android if a UPI app was used in the last 5 mins
+      String? recentApp = await platform.invokeMethod('getRecentUpiApp');
+      if (recentApp != null) {
+        // 3. Check if our background listener already caught the transaction!
+        bool alreadyLogged = await _smsService.hasRecentTransaction(5);
+
+        if (!alreadyLogged) {
+          // Anti-spam check: Only prompt once per 5 minutes
+          int lastPrompt = prefs.getInt('last_smart_prompt') ?? 0;
+          if (DateTime.now().millisecondsSinceEpoch - lastPrompt >
+              (5 * 60 * 1000)) {
+            await prefs.setInt(
+              'last_smart_prompt',
+              DateTime.now().millisecondsSinceEpoch,
+            );
+            if (mounted) {
+              _showSmartEntryDialog(recentApp);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print("Smart Prompt check failed: $e");
+    }
+  }
+
+  // [NEW] The UI Dialog for the Smart Prompt
+  void _showSmartEntryDialog(String appName) {
+    final TextEditingController amountController = TextEditingController();
+    final TextEditingController merchantController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Constants.colorSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.auto_awesome, color: Constants.colorPrimary),
+            const SizedBox(width: 10),
+            const Text(
+              "Smart Prompt",
+              style: TextStyle(color: Colors.white, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "We noticed you recently used $appName. Did you make a payment?",
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: amountController,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: "Amount (₹)",
+                prefixIcon: const Icon(Icons.currency_rupee),
+                filled: true,
+                fillColor: Colors.black26,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: merchantController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: "Merchant / Reason",
+                prefixIcon: const Icon(Icons.store),
+                filled: true,
+                fillColor: Colors.black26,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("NO", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Constants.colorPrimary,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () async {
+              double amount = double.tryParse(amountController.text) ?? 0.0;
+              if (amount > 0) {
+                final txn = TransactionModel(
+                  hash: "SMART_${DateTime.now().millisecondsSinceEpoch}",
+                  sender: "User",
+                  body: "Smart Entry via $appName: ${merchantController.text}",
+                  amount: amount,
+                  category:
+                      "Uncategorized", // Can be manually assigned later in Neural Override
+                  type: "UPI",
+                  merchant: merchantController.text.isNotEmpty
+                      ? merchantController.text
+                      : "Unknown",
+                  timestamp: DateTime.now().millisecondsSinceEpoch,
+                );
+                await _smsService.saveTransaction(txn);
+                if (mounted) Navigator.pop(ctx);
+                _loadData(); // Refresh Dashboard
+              }
+            },
+            child: const Text("LOG EXPENSE"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Open Android Notification Settings
   Future<void> _openNotificationSettings() async {
     try {
       await platform.invokeMethod('openNotificationSettings');
@@ -81,8 +237,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     // 2. Fetch Data
     final list = await _smsService.getTransactionsByMonth(_selectedMonth);
-    final forecastData =
-        await _predictionService.getForecastForMonth(_selectedMonth);
+    final forecastData = await _predictionService.getForecastForMonth(
+      _selectedMonth,
+    );
 
     if (mounted) {
       setState(() {
@@ -96,25 +253,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _listenToLiveSMS() {
     _smsService.liveTransactionStream.listen((txn) async {
       if (txn != null) {
+        // 1. Check if a transaction with the same amount happened in the last 5 mins
         bool isDuplicate = await _smsService.existsSimilarTransaction(txn);
 
         if (isDuplicate) {
-          // Check user's global preference
+          // 2. Automatically default to dropping duplicates silently
           final prefs = await SharedPreferences.getInstance();
-          String dedupeRule =
-              prefs.getString('dedupe_rule') ?? 'ask'; // 'ask', 'auto_drop'
+
+          // Changed default from 'ask' to 'auto_drop'
+          String dedupeRule = prefs.getString('dedupe_rule') ?? 'auto_drop';
 
           if (dedupeRule == 'auto_drop') {
             print(
-                "Silently dropped duplicate ₹${txn.amount} from ${txn.sender}");
-            // Do nothing, drop it
+              "🛡️ SILENTLY DROPPED DUPLICATE: ₹${txn.amount} from ${txn.sender}",
+            );
+            // We do nothing. The duplicate is destroyed.
           } else {
-            // Ask the user case-by-case
+            // Only ask if the user explicitly turned off auto-drop in settings
             if (mounted) {
               _showDuplicateDialog(txn);
             }
           }
         } else {
+          // 3. NO DUPLICATE: Save automatically
           await _smsService.saveTransaction(txn);
           _refreshIfCurrentMonth(txn);
         }
@@ -164,8 +325,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: Constants.colorPrimary,
-                foregroundColor: Colors.black),
+              backgroundColor: Constants.colorPrimary,
+              foregroundColor: Colors.black,
+            ),
             onPressed: () async {
               Navigator.pop(context);
               await _smsService.saveTransaction(txn);
@@ -202,32 +364,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildDialogRow(
-                "Highest Spend:",
-                "$topCategory (₹${topAmount.toStringAsFixed(0)})",
-                Colors.redAccent),
+              "Highest Spend:",
+              "$topCategory (₹${topAmount.toStringAsFixed(0)})",
+              Colors.redAccent,
+            ),
             const Divider(color: Colors.white24),
             _buildDialogRow(
-                "End of Month Est:",
-                "₹${projected.toStringAsFixed(0)}",
-                projected > budget ? Colors.red : Constants.colorPrimary),
+              "End of Month Est:",
+              "₹${projected.toStringAsFixed(0)}",
+              projected > budget ? Colors.red : Constants.colorPrimary,
+            ),
             const SizedBox(height: 10),
-            _buildDialogRow("Next Month Est:",
-                "₹${nextMonth.toStringAsFixed(0)}", Colors.blueAccent),
+            _buildDialogRow(
+              "Next Month Est:",
+              "₹${nextMonth.toStringAsFixed(0)}",
+              Colors.blueAccent,
+            ),
             const SizedBox(height: 15),
             Text(
               nextMonth > budget
                   ? "⚠ Projection: Based on your average daily spend, you may exceed your budget next month."
                   : "✅ Projection: You are on track to stay within budget next month.",
               style: const TextStyle(color: Colors.grey, fontSize: 12),
-            )
+            ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("CLOSE",
-                style: TextStyle(color: Constants.colorPrimary)),
-          )
+            child: const Text(
+              "CLOSE",
+              style: TextStyle(color: Constants.colorPrimary),
+            ),
+          ),
         ],
       ),
     );
@@ -240,8 +409,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(color: Colors.white70)),
-          Text(value,
-              style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+          Text(
+            value,
+            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          ),
         ],
       ),
     );
@@ -254,22 +425,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     bool isOverBudget = spent > budget;
     double progress = (budget > 0) ? (spent / budget).clamp(0.0, 1.0) : 0.0;
-    Color statusColor =
-        isOverBudget ? Colors.redAccent : Constants.colorPrimary;
+    Color statusColor = isOverBudget
+        ? Colors.redAccent
+        : Constants.colorPrimary;
 
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-          color: Constants.colorSurface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 10,
-                offset: const Offset(0, 4))
-          ]),
+        color: Constants.colorSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -279,33 +453,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("TOTAL SPENT",
-                      style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 10,
-                          letterSpacing: 1.5)),
+                  const Text(
+                    "TOTAL SPENT",
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 10,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text("₹${spent.toStringAsFixed(0)}",
-                      style: TextStyle(
-                          color: statusColor,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold)),
+                  Text(
+                    "₹${spent.toStringAsFixed(0)}",
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  const Text("MONTHLY BUDGET",
-                      style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 10,
-                          letterSpacing: 1.5)),
+                  const Text(
+                    "MONTHLY BUDGET",
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 10,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text("₹${budget.toStringAsFixed(0)}",
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold)),
+                  Text(
+                    "₹${budget.toStringAsFixed(0)}",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -329,9 +515,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ? "⚠️ Budget Exceeded"
                     : "${(progress * 100).toStringAsFixed(0)}% Used",
                 style: TextStyle(
-                    color: statusColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold),
+                  color: statusColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               Text(
                 "Remaining: ₹${(budget - spent).toStringAsFixed(0)}",
@@ -346,24 +533,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
-                    color: Colors.redAccent.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: Colors.redAccent.withOpacity(0.3))),
+                  color: Colors.redAccent.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+                ),
                 child: Row(
                   children: [
-                    const Icon(Icons.trending_up,
-                        color: Colors.redAccent, size: 14),
+                    const Icon(
+                      Icons.trending_up,
+                      color: Colors.redAccent,
+                      size: 14,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       "Most Spent: $topCategory",
                       style: const TextStyle(
-                          color: Colors.redAccent,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold),
+                        color: Colors.redAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -372,29 +565,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onTap: _showPredictionDialog,
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                      color: Constants.colorPrimary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: Constants.colorPrimary.withOpacity(0.3))),
+                    color: Constants.colorPrimary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Constants.colorPrimary.withOpacity(0.3),
+                    ),
+                  ),
                   child: const Row(
                     children: [
-                      Icon(Icons.insights,
-                          color: Constants.colorPrimary, size: 14),
+                      Icon(
+                        Icons.insights,
+                        color: Constants.colorPrimary,
+                        size: 14,
+                      ),
                       SizedBox(width: 6),
-                      Text("View Projection",
-                          style: TextStyle(
-                              color: Constants.colorPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold)),
+                      Text(
+                        "View Projection",
+                        style: TextStyle(
+                          color: Constants.colorPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -408,16 +611,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
-              icon: const Icon(Icons.chevron_left, color: Colors.white),
-              onPressed: () => _changeMonth(-1)),
-          Text(monthName,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold)),
+            icon: const Icon(Icons.chevron_left, color: Colors.white),
+            onPressed: () => _changeMonth(-1),
+          ),
+          Text(
+            monthName,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           IconButton(
-              icon: const Icon(Icons.chevron_right, color: Colors.white),
-              onPressed: () => _changeMonth(1)),
+            icon: const Icon(Icons.chevron_right, color: Colors.white),
+            onPressed: () => _changeMonth(1),
+          ),
         ],
       ),
     );
@@ -425,8 +633,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _changeMonth(int monthsToAdd) {
     setState(() {
-      _selectedMonth =
-          DateTime(_selectedMonth.year, _selectedMonth.month + monthsToAdd, 1);
+      _selectedMonth = DateTime(
+        _selectedMonth.year,
+        _selectedMonth.month + monthsToAdd,
+        1,
+      );
     });
     _loadData();
   }
@@ -435,14 +646,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Expanded(
       child: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(color: Constants.colorPrimary))
+              child: CircularProgressIndicator(color: Constants.colorPrimary),
+            )
           : _transactions.isEmpty
-              ? _buildEmptyState()
-              : ListView.builder(
-                  itemCount: _transactions.length,
-                  itemBuilder: (context, index) =>
-                      _buildTransactionItem(_transactions[index]),
-                ),
+          ? _buildEmptyState()
+          : ListView.builder(
+              itemCount: _transactions.length,
+              itemBuilder: (context, index) =>
+                  _buildTransactionItem(_transactions[index]),
+            ),
     );
   }
 
@@ -451,19 +663,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.security_update_warning_outlined,
-              size: 80, color: Constants.colorPrimary.withOpacity(0.4)),
+          Icon(
+            Icons.security_update_warning_outlined,
+            size: 80,
+            color: Constants.colorPrimary.withOpacity(0.4),
+          ),
           const SizedBox(height: 16),
-          const Text("VAULT SECURE",
-              style: TextStyle(
-                  color: Constants.colorPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 3)),
+          const Text(
+            "VAULT SECURE",
+            style: TextStyle(
+              color: Constants.colorPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 3,
+            ),
+          ),
           const SizedBox(height: 8),
-          const Text("No unencrypted financial data\ndetected for this cycle.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 14)),
+          const Text(
+            "No unencrypted financial data\ndetected for this cycle.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey, fontSize: 14),
+          ),
         ],
       ),
     );
@@ -492,10 +712,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           });
 
           final db = await DBService().database;
-          await db.insert('ignored_hashes', {'hash': txn.hash},
-              conflictAlgorithm: ConflictAlgorithm.ignore);
-          await db.delete(Constants.tableTransactions,
-              where: 'hash = ?', whereArgs: [txn.hash]);
+          await db.insert('ignored_hashes', {
+            'hash': txn.hash,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+          await db.delete(
+            Constants.tableTransactions,
+            where: 'hash = ?',
+            whereArgs: [txn.hash],
+          );
           _loadData();
         },
         child: Card(
@@ -505,28 +729,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: ListTile(
             onTap: () async {
               bool? updated = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) =>
-                          TransactionDetailScreen(transaction: txn)));
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TransactionDetailScreen(transaction: txn),
+                ),
+              );
               if (updated == true) _loadData();
             },
             leading: CircleAvatar(
               backgroundColor: _getCategoryColor(txn.category).withOpacity(0.2),
-              child: Icon(_getCategoryIcon(txn.category),
-                  color: _getCategoryColor(txn.category), size: 20),
+              child: Icon(
+                _getCategoryIcon(txn.category),
+                color: _getCategoryColor(txn.category),
+                size: 20,
+              ),
             ),
-            title: Text(txn.category,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
+            title: Text(
+              txn.category,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             subtitle: Text(
-                "${txn.merchant} • ${DateFormat('dd MMM').format(date)}",
-                style: const TextStyle(color: Colors.grey, fontSize: 12)),
-            trailing: Text("₹${txn.amount.toStringAsFixed(0)}",
-                style: const TextStyle(
-                    color: Constants.colorPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold)),
+              "${txn.merchant} • ${DateFormat('dd MMM').format(date)}",
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+            trailing: Text(
+              "₹${txn.amount.toStringAsFixed(0)}",
+              style: const TextStyle(
+                color: Constants.colorPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ),
       ),
@@ -569,33 +805,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: const Text("CipherSpend"),
         backgroundColor: Constants.colorSurface,
         actions: [
-          // [NEW] Hybrid Engine Trigger
           IconButton(
             icon: const Icon(Icons.notifications_active, color: Colors.amber),
             tooltip: "Enable Notification Listener",
             onPressed: _openNotificationSettings,
           ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
           IconButton(
             icon: const Icon(Icons.bar_chart, color: Constants.colorPrimary),
             onPressed: () {
               Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => VisualReportScreen(
-                            transactions: _transactions,
-                            budget: _forecast['budget'] ?? 0.0,
-                          )));
+                context,
+                MaterialPageRoute(
+                  builder: (_) => VisualReportScreen(
+                    transactions: _transactions,
+                    budget: _forecast['budget'] ?? 0.0,
+                  ),
+                ),
+              );
             },
           ),
           IconButton(
             icon: const Icon(Icons.settings),
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen())),
-          )
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
         ],
       ),
       body: Column(

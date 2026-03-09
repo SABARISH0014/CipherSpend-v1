@@ -6,32 +6,45 @@ import 'dart:convert';
 
 class ParserService {
   static final RegExp _amountRegex = RegExp(
-      r'(?:rs\.?|inr|₹|amount|debited by|refund of|txn of)\s*[:\-\s]*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
-      caseSensitive: false);
+    r'(?:rs\.?|inr|₹|amount|debited by|refund of|txn of)\s*[:\-\s]*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+    caseSensitive: false,
+  );
 
   static final RegExp _notifAmountRegex = RegExp(
-      r'(?:₹|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
-      caseSensitive: false);
+    r'(?:₹|Rs\.?)\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)',
+    caseSensitive: false,
+  );
 
   // Added '|to' to catch "Paid ... to Starbucks"
   static final RegExp _merchantRegex = RegExp(
-      r'(?:paid to|sent to|transfer to|purchase at|txn at|to vpa|for|from|in|to)\s+([a-zA-Z0-9\s\.\@\-\_]+)',
-      caseSensitive: false);
+    r'(?:paid to|sent to|transfer to|purchase at|txn at|to vpa|for|from|in|to)\s+([a-zA-Z0-9\s\.\@\-\_]+)',
+    caseSensitive: false,
+  );
 
-  static final RegExp _upiRegex =
-      RegExp(r'(upi|vpa|paytm|gpay|phonepe|bhim|qr)', caseSensitive: false);
+  static final RegExp _upiRegex = RegExp(
+    r'(upi|vpa|paytm|gpay|phonepe|bhim|qr)',
+    caseSensitive: false,
+  );
 
   static final List<RegExp> _ignorePatterns = [
-    RegExp(r'(?:data|internet).*(?:consumed|used|exhausted|left|remaining)',
-        caseSensitive: false),
-    RegExp(r'(?:recharge|plan|pack|offer|validity|expired|quota|benefit)',
-        caseSensitive: false),
-    RegExp(r'(?:get|claim).*(?:gb|mb).*(?:at|@)\s*(?:rs|₹)',
-        caseSensitive: false),
+    RegExp(
+      r'(?:data|internet).*(?:consumed|used|exhausted|left|remaining)',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'(?:recharge|plan|pack|offer|validity|expired|quota|benefit)',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'(?:get|claim).*(?:gb|mb).*(?:at|@)\s*(?:rs|₹)',
+      caseSensitive: false,
+    ),
     RegExp(r'(?:otp|verification code|auth code|login)', caseSensitive: false),
     RegExp(r'(?:http|www|bit\.ly|goo\.gl|\.in/|\.com/)', caseSensitive: false),
-    RegExp(r'(?:congratulations|winner|lucky|prize|reward)',
-        caseSensitive: false),
+    RegExp(
+      r'(?:congratulations|winner|lucky|prize|reward)',
+      caseSensitive: false,
+    ),
     RegExp(r'(?:loan|pre-approved|limit increase)', caseSensitive: false),
   ];
 
@@ -53,11 +66,24 @@ class ParserService {
       "Paytm",
       "BHIM",
       "AmazonPay",
-      "Freecharge"
+      "Freecharge",
     ].contains(sender);
 
-    if (!isNotification && isSpam(cleanBody)) {
-      print("🚫 Dropped Spam: $cleanBody");
+    if (isNotification) {
+      // 1. Broadened keywords to catch all payment app variations
+      bool isExpense = RegExp(
+        r'(paid|sent|debited|payment|to vpa|successful)',
+        caseSensitive: false,
+      ).hasMatch(lowerBody);
+      bool isIncomeOrPromo = RegExp(
+        r'(received|credited|cashback|won|reward|offer)',
+        caseSensitive: false,
+      ).hasMatch(lowerBody);
+
+      if (!isExpense || isIncomeOrPromo) {
+        return null; // Safely drop incoming money or cashback promos
+      }
+    } else if (isSpam(cleanBody)) {
       return null;
     }
 
@@ -68,7 +94,19 @@ class ParserService {
       print("AI Prediction failed: $e");
     }
 
-    if (category == "Ignore" || category == "Spam") return null;
+    String lowerCat = category.toLowerCase();
+
+    // 2. PROTECT NOTIFICATIONS FROM AI SPAM FILTER
+    // Since we already verified it's a valid expense above, we override the AI.
+    if (isNotification &&
+        (lowerCat == "ignore" ||
+            lowerCat == "spam" ||
+            lowerCat == "uncategorized")) {
+      category = "Transaction"; // Safe default for UPI
+    } else if (!isNotification &&
+        (lowerCat == "ignore" || lowerCat == "spam")) {
+      return null; // Drop standard SMS spam
+    }
 
     double amount = 0.0;
     String merchant = "Unknown";
@@ -123,9 +161,12 @@ class ParserService {
 
       // [FIXED] Regex now allows End of String ($) or Space (\s+) as a delimiter.
       // Used non-capturing group (?:...) to ensure split doesn't return the delimiter.
-      name = name.split(RegExp(
+      name = name.split(
+        RegExp(
           r'\s+(?:on|at|from|via|successful|ref|txn)(?:\s+|$)',
-          caseSensitive: false))[0];
+          caseSensitive: false,
+        ),
+      )[0];
 
       name = name.replaceAll(RegExp(r'[.\-_]+$'), '');
       return name.trim();
@@ -142,7 +183,8 @@ class ParserService {
     if (_upiRegex.hasMatch(body)) return "UPI";
     if (body.contains("card") ||
         body.contains("visa") ||
-        body.contains("mastercard")) return "Card";
+        body.contains("mastercard"))
+      return "Card";
     if (body.contains("atm") || body.contains("cash")) return "Cash";
     return "Bank Transfer";
   }

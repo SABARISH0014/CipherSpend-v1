@@ -1,18 +1,16 @@
 package com.example.cipherspend
 
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.database.Cursor       // <--- RESTORED
-import android.net.Uri             // <--- RESTORED
-import android.provider.Settings   // <--- RESTORED
-import android.os.Build
-import android.os.Handler
-import android.os.Looper
+import android.Manifest
+import android.content.*
+import android.content.pm.PackageManager
+import android.database.Cursor
+import android.net.Uri
+import android.os.*
+import android.provider.Settings
 import android.telephony.SmsManager
 import android.telephony.SmsMessage
 import androidx.annotation.NonNull
+import androidx.core.app.ActivityCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -20,135 +18,201 @@ import io.flutter.plugin.common.MethodChannel
 import java.util.ArrayList
 import java.util.HashMap
 
-class MainActivity: FlutterFragmentActivity() {
+class MainActivity : FlutterFragmentActivity() {
+
     private val METHOD_CHANNEL = "com.example.cipherspend/sms"
     private val EVENT_CHANNEL = "com.cipherspend/sms_stream"
+
     private var smsReceiver: BroadcastReceiver? = null
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL).setMethodCallHandler { call, result ->
-            when (call.method) {
-                // 1. Loopback Verification
-                "verifyLoopbackSms" -> {
-                    val phone = call.argument<String>("phone")
-                    if (phone != null) {
-                        verifyLoopback(phone, result)
-                    } else {
-                        result.error("INVALID", "Phone cannot be null", null)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
+            .setMethodCallHandler { call, result ->
+
+                when (call.method) {
+
+                    "verifyLoopbackSms" -> {
+                        val phone = call.argument<String>("phone")
+                        if (phone != null) {
+                            verifyLoopback(phone, result)
+                        } else {
+                            result.error("INVALID", "Phone cannot be null", null)
+                        }
                     }
-                }
-                
-                // 2. Historical Sync
-                "readSmsHistory" -> {
-                    val sinceTimestamp = call.argument<Long>("since") ?: (System.currentTimeMillis() - (180L * 24 * 60 * 60 * 1000))
-                    Thread {
-                        val messages = readSmsInbox(sinceTimestamp)
-                        runOnUiThread { result.success(messages) }
-                    }.start()
-                }
 
-                // 3. Background Cache Retrieval
-                "getAndClearBackgroundCache" -> {
-                    val prefs = getSharedPreferences("CipherSmsCache", Context.MODE_PRIVATE)
-                    val cachedData = prefs.getString("pending_sms", "[]")
-                    prefs.edit().remove("pending_sms").apply()
-                    result.success(cachedData)
-                }
+                    "readSmsHistory" -> {
+                        val sinceTimestamp =
+                            call.argument<Long>("since")
+                                ?: (System.currentTimeMillis() - (180L * 24 * 60 * 60 * 1000))
 
-                // 4. Open Notification Settings
-                "openNotificationSettings" -> {
-                    try {
-                        val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.error("UNAVAILABLE", "Could not open settings", null)
+                        Thread {
+                            val messages = readSmsInbox(sinceTimestamp)
+                            runOnUiThread { result.success(messages) }
+                        }.start()
                     }
-                }
 
-                // 5. Check if Permission is Granted
-                "isNotificationListenerEnabled" -> {
-                    val packageName = packageName
-                    val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
-                    val enabled = flat != null && flat.contains(packageName)
-                    result.success(enabled)
-                }
+                    "getAndClearBackgroundCache" -> {
+                        val prefs = getSharedPreferences("CipherSmsCache", Context.MODE_PRIVATE)
+                        val cached = prefs.getString("pending_sms", "[]")
+                        prefs.edit().remove("pending_sms").apply()
+                        result.success(cached)
+                    }
 
-                else -> result.notImplemented()
+                    "openNotificationSettings" -> {
+                        try {
+                            startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS").apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            })
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("ERROR", "Cannot open settings", null)
+                        }
+                    }
+
+                    "isNotificationListenerEnabled" -> {
+                        val flat = Settings.Secure.getString(
+                            contentResolver,
+                            "enabled_notification_listeners"
+                        )
+                        result.success(flat?.contains(packageName) == true)
+                    }
+
+                    // --- SMART PROMPT LOGIC ---
+                    "hasUsageAccess" -> {
+                        val appOps = getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+                        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            appOps.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            appOps.checkOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
+                        }
+                        result.success(mode == android.app.AppOpsManager.MODE_ALLOWED)
+                    }
+
+                    "openUsageAccessSettings" -> {
+                        try {
+                            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("UNAVAILABLE", "Usage Access Settings not available", null)
+                        }
+                    }
+
+                    "getRecentUpiApp" -> {
+                        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
+                        val endTime = System.currentTimeMillis()
+                        val startTime = endTime - (5 * 60 * 1000) // Look at the last 5 minutes
+
+                        val stats = usageStatsManager.queryUsageStats(android.app.usage.UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
+                        var recentUpiApp: String? = null
+                        var latestTime: Long = 0
+
+                        val upiApps = mapOf(
+                            "com.google.android.apps.nbu.paisa.user" to "GPay",
+                            "com.phonepe.app" to "PhonePe",
+                            "net.one97.paytm" to "Paytm",
+                            "in.org.npci.upiapp" to "BHIM",
+                            "com.dreamplug.androidapp" to "Cred"
+                        )
+
+                        stats?.forEach { stat ->
+                            if (upiApps.containsKey(stat.packageName)) {
+                                if (stat.lastTimeUsed > latestTime && stat.lastTimeUsed > startTime) {
+                                    latestTime = stat.lastTimeUsed
+                                    recentUpiApp = upiApps[stat.packageName]
+                                }
+                            }
+                        }
+                        result.success(recentUpiApp)
+                    }
+
+                    else -> result.notImplemented()
+                }
             }
-        }
 
-        // Live SMS Stream Logic
-        EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL).setStreamHandler(
-            object : EventChannel.StreamHandler {
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
+            .setStreamHandler(object : EventChannel.StreamHandler {
+
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                     registerSmsReceiver(events)
                 }
+
                 override fun onCancel(arguments: Any?) {
                     unregisterSmsReceiver()
                 }
-            }
-        )
+            })
     }
 
-    // --- LOOPBACK VERIFICATION LOGIC ---
     private fun verifyLoopback(phone: String, result: MethodChannel.Result) {
-        val verifyPhrase = "CIPHER_VERIFY" // Secret phrase to detect
-        var isVerified = false
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.SEND_SMS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            result.error("PERMISSION", "SEND_SMS permission missing", null)
+            return
+        }
+
+        val verifyPhrase = "CIPHER_VERIFY"
+        var resultSent = false
 
         val tempReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action == "android.provider.Telephony.SMS_RECEIVED") {
-                    val bundle = intent.extras
-                    val pdus = bundle?.get("pdus") as Array<*>?
-                    
-                    pdus?.forEach { pdu ->
-                        val format = bundle.getString("format")
-                        val msg = SmsMessage.createFromPdu(pdu as ByteArray, format)
-                        
-                        if (msg.messageBody?.contains(verifyPhrase) == true) {
-                            isVerified = true
-                            context.unregisterReceiver(this)
+                val bundle = intent.extras ?: return
+                val pdus = bundle.get("pdus") as? Array<*> ?: return
+
+                for (pdu in pdus) {
+                    val format = bundle.getString("format")
+                    val msg = SmsMessage.createFromPdu(pdu as ByteArray, format)
+
+                    if (msg.messageBody?.contains(verifyPhrase) == true) {
+                        if (!resultSent) {
                             result.success(true)
-                            return
+                            resultSent = true
                         }
+                        context.unregisterReceiver(this)
+                        return
                     }
                 }
             }
         }
 
         val filter = IntentFilter("android.provider.Telephony.SMS_RECEIVED")
+        // [FIX] Android 13+ requires Exported flag for runtime receivers
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(tempReceiver, filter, Context.RECEIVER_EXPORTED)
         } else {
             registerReceiver(tempReceiver, filter)
         }
 
-        sendSMS(phone, "Do not share this code. $verifyPhrase")
+        sendSMS(phone, "Verification code: $verifyPhrase")
 
         Handler(Looper.getMainLooper()).postDelayed({
-            if (!isVerified) {
+            if (!resultSent) {
                 try {
                     unregisterReceiver(tempReceiver)
-                    result.success(false) 
-                } catch (e: Exception) {}
+                } catch (_: Exception) {}
+                result.success(false)
             }
         }, 30000)
     }
 
-    private fun sendSMS(phone: String?, message: String?) {
-        if (phone == null || message == null) return
+    private fun sendSMS(phone: String, message: String) {
         try {
-            val smsManager: SmsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                this.getSystemService(SmsManager::class.java)
-            } else {
-                @Suppress("DEPRECATION")
-                SmsManager.getDefault()
-            }
+            val smsManager =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                    getSystemService(SmsManager::class.java)
+                else {
+                    @Suppress("DEPRECATION")
+                    SmsManager.getDefault()
+                }
+
             smsManager.sendTextMessage(phone, null, message, null, null)
+
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -157,25 +221,25 @@ class MainActivity: FlutterFragmentActivity() {
     private fun registerSmsReceiver(events: EventChannel.EventSink?) {
         smsReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action == "android.provider.Telephony.SMS_RECEIVED") {
-                    val bundle = intent.extras
-                    val pdus = bundle?.get("pdus") as Array<*>?
-                    
-                    pdus?.forEach { pdu ->
-                        val format = bundle.getString("format")
-                        val msg = SmsMessage.createFromPdu(pdu as ByteArray, format)
-                        
-                        val data = HashMap<String, Any>()
-                        data["sender"] = msg.originatingAddress ?: "Unknown"
-                        data["body"] = msg.messageBody ?: ""
-                        data["timestamp"] = msg.timestampMillis
-                        events?.success(data)
-                    }
+                val bundle = intent.extras ?: return
+                val pdus = bundle.get("pdus") as? Array<*> ?: return
+
+                for (pdu in pdus) {
+                    val format = bundle.getString("format")
+                    val msg = SmsMessage.createFromPdu(pdu as ByteArray, format)
+
+                    val data = HashMap<String, Any>()
+                    data["sender"] = msg.originatingAddress ?: "Unknown"
+                    data["body"] = msg.messageBody ?: ""
+                    data["timestamp"] = msg.timestampMillis
+
+                    events?.success(data)
                 }
             }
         }
-        
+
         val filter = IntentFilter("android.provider.Telephony.SMS_RECEIVED")
+        // [FIX] Android 13+ requires Exported flag for runtime receivers
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(smsReceiver, filter, Context.RECEIVER_EXPORTED)
         } else {
@@ -190,33 +254,29 @@ class MainActivity: FlutterFragmentActivity() {
         }
     }
 
-    // --- HISTORICAL SCANNER ---
-    private fun readSmsInbox(sinceTimestamp: Long): List<Map<String, Any>> {
-        val messages = ArrayList<Map<String, Any>>()
-        val uri = Uri.parse("content://sms/inbox")
-        val projection = arrayOf("body", "address", "date")
-        val selection = "date > ?"
-        val selectionArgs = arrayOf(sinceTimestamp.toString())
-        val sortOrder = "date ASC" 
+    private fun readSmsInbox(since: Long): List<Map<String, Any>> {
+        val list = ArrayList<Map<String, Any>>()
+        val cursor: Cursor? = contentResolver.query(
+            Uri.parse("content://sms/inbox"),
+            arrayOf("body", "address", "date"),
+            "date > ?",
+            arrayOf(since.toString()),
+            "date ASC"
+        )
 
-        try {
-            val cursor: Cursor? = contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)
-            cursor?.use {
-                val bodyIdx = it.getColumnIndex("body")
-                val addrIdx = it.getColumnIndex("address")
-                val dateIdx = it.getColumnIndex("date")
+        cursor?.use {
+            val bodyIdx = it.getColumnIndex("body")
+            val addrIdx = it.getColumnIndex("address")
+            val dateIdx = it.getColumnIndex("date")
 
-                while (it.moveToNext()) {
-                    val map = HashMap<String, Any>()
-                    map["body"] = it.getString(bodyIdx)
-                    map["sender"] = it.getString(addrIdx)
-                    map["timestamp"] = it.getLong(dateIdx)
-                    messages.add(map)
-                }
+            while (it.moveToNext()) {
+                val map = HashMap<String, Any>()
+                map["body"] = it.getString(bodyIdx)
+                map["sender"] = it.getString(addrIdx)
+                map["timestamp"] = it.getLong(dateIdx)
+                list.add(map)
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
-        return messages
+        return list
     }
 }

@@ -42,8 +42,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance
-        .addObserver(this); // Listen for app lifecycle changes
+    WidgetsBinding.instance.addObserver(
+      this,
+    ); // Listen for app lifecycle changes
     int today = DateTime.now().day;
     _salaryDateController.text = today.toString();
   }
@@ -72,15 +73,19 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
           canAuthenticateWithBiometrics || await _localAuth.isDeviceSupported();
 
       if (!canAuthenticate) {
-        setState(() => _errorMessage =
-            "Biometrics are not supported or set up on this device.");
+        setState(
+          () => _errorMessage =
+              "Biometrics are not supported or set up on this device.",
+        );
         return;
       }
 
       final bool didAuthenticate = await _localAuth.authenticate(
         localizedReason: 'Scan your fingerprint to register your vault lock',
-        options:
-            const AuthenticationOptions(biometricOnly: true, stickyAuth: true),
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+        ),
       );
 
       if (didAuthenticate) {
@@ -98,7 +103,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     // 1. Validation Logic
     if (!_isBiometricRegistered) {
       setState(
-          () => _errorMessage = "Please register your biometric lock first.");
+        () => _errorMessage = "Please register your biometric lock first.",
+      );
       return;
     }
 
@@ -141,16 +147,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     await _checkListenerAndProceed();
   }
 
-  // [NEW] Logic to handle the Notification Permission Check
   Future<void> _checkListenerAndProceed() async {
     try {
       // Ask Android: Is "CipherSpend" allowed to read notifications?
-      final bool isEnabled =
-          await platform.invokeMethod('isNotificationListenerEnabled');
+      final bool isEnabled = await platform.invokeMethod(
+        'isNotificationListenerEnabled',
+      );
 
       if (isEnabled) {
-        // Yes -> Start the Sync
-        _runInitialSync();
+        // Yes -> Ask Dedupe Preference (Instead of jumping to Sync)
+        _askDedupePreference();
       } else {
         // No -> Stop and ask User
         if (mounted) {
@@ -163,8 +169,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
             barrierDismissible: false,
             builder: (ctx) => AlertDialog(
               backgroundColor: Constants.colorSurface,
-              title: const Text("Enable UPI Tracking",
-                  style: TextStyle(color: Colors.white)),
+              title: const Text(
+                "Enable UPI Tracking",
+                style: TextStyle(color: Colors.white),
+              ),
               content: const Text(
                 "To track GPay, PhonePe, and Paytm transactions automatically, CipherSpend needs 'Notification Access'.\n\n"
                 "1. Tap ENABLE below.\n"
@@ -176,24 +184,31 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                 TextButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    // User declined, proceed without it (Fallback to SMS only)
-                    _runInitialSync();
+                    // User declined, proceed to Dedupe step
+                    _askDedupePreference();
                   },
-                  child:
-                      const Text("SKIP", style: TextStyle(color: Colors.grey)),
+                  child: const Text(
+                    "SKIP",
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: Constants.colorPrimary),
+                    backgroundColor: Constants.colorPrimary,
+                  ),
                   onPressed: () async {
                     Navigator.pop(ctx);
                     // Open Android Settings Page
                     await platform.invokeMethod('openNotificationSettings');
                     // We wait for user to come back (handled by didChangeAppLifecycleState)
                   },
-                  child: const Text("ENABLE",
-                      style: TextStyle(
-                          color: Colors.black, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    "ENABLE",
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -202,8 +217,63 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
       }
     } catch (e) {
       print("Error checking listener: $e");
-      _runInitialSync(); // Fallback if check fails
+      _askDedupePreference(); // Fallback if check fails
     }
+  }
+
+  Future<void> _askDedupePreference() async {
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Constants.colorSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.difference, color: Constants.colorPrimary),
+            SizedBox(width: 10),
+            Text(
+              "Duplicate Handling",
+              style: TextStyle(color: Colors.white, fontSize: 18),
+            ),
+          ],
+        ),
+        content: const Text(
+          "Banks and apps often send multiple alerts for the same transaction (e.g., an SMS and a GPay notification).\n\n"
+          "Should CipherSpend automatically drop duplicates, or ask you every time one is detected?",
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('dedupe_rule', 'ask');
+              _runInitialSync(); // Start sync after saving
+            },
+            child: const Text("ASK ME", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Constants.colorPrimary,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('dedupe_rule', 'auto_drop');
+              _runInitialSync(); // Start sync after saving
+            },
+            child: const Text(
+              "AUTO-DROP",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // [NEW] The actual sync logic moved to a separate function
@@ -214,14 +284,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     });
 
     // Run full history sync (180 days default)
-    await _smsService.syncHistory(onProgress: (current, total) {
-      if (mounted) {
-        setState(() {
-          _currentSynced = current;
-          _totalToSync = total;
-        });
-      }
-    });
+    await _smsService.syncHistory(
+      onProgress: (current, total) {
+        if (mounted) {
+          setState(() {
+            _currentSynced = current;
+            _totalToSync = total;
+          });
+        }
+      },
+    );
 
     if (mounted) {
       Navigator.pushReplacement(
@@ -241,8 +313,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 24,
+                ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -315,14 +389,18 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                                     const Text(
                                       "Tap to scan your fingerprint",
                                       style: TextStyle(
-                                          color: Colors.grey, fontSize: 13),
+                                        color: Colors.grey,
+                                        fontSize: 13,
+                                      ),
                                     ),
                                 ],
                               ),
                             ),
                             if (_isBiometricRegistered)
-                              const Icon(Icons.check_circle,
-                                  color: Colors.green),
+                              const Icon(
+                                Icons.check_circle,
+                                color: Colors.green,
+                              ),
                           ],
                         ),
                       ),
@@ -336,8 +414,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                       decoration: InputDecoration(
                         labelText: "User Name",
                         labelStyle: const TextStyle(color: Colors.grey),
-                        prefixIcon: const Icon(Icons.person_outline,
-                            color: Colors.grey),
+                        prefixIcon: const Icon(
+                          Icons.person_outline,
+                          color: Colors.grey,
+                        ),
                         filled: true,
                         fillColor: Constants.colorSurface,
                         border: OutlineInputBorder(
@@ -356,8 +436,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                         labelText: "Monthly Budget (₹)",
                         labelStyle: const TextStyle(color: Colors.grey),
                         prefixIcon: const Icon(
-                            Icons.account_balance_wallet_outlined,
-                            color: Colors.grey),
+                          Icons.account_balance_wallet_outlined,
+                          color: Colors.grey,
+                        ),
                         filled: true,
                         fillColor: Constants.colorSurface,
                         border: OutlineInputBorder(
@@ -377,8 +458,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                         labelStyle: const TextStyle(color: Colors.grey),
                         hintText: "Day of the month (1-31)",
                         hintStyle: const TextStyle(color: Colors.white24),
-                        prefixIcon: const Icon(Icons.calendar_today_outlined,
-                            color: Colors.grey),
+                        prefixIcon: const Icon(
+                          Icons.calendar_today_outlined,
+                          color: Colors.grey,
+                        ),
                         filled: true,
                         fillColor: Constants.colorSurface,
                         border: OutlineInputBorder(
@@ -394,7 +477,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                       Text(
                         _errorMessage,
                         style: const TextStyle(
-                            color: Constants.colorError, fontSize: 14),
+                          color: Constants.colorError,
+                          fontSize: 14,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 16),
@@ -418,7 +503,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                         child: const Text(
                           "Finalize & Sync",
                           style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),

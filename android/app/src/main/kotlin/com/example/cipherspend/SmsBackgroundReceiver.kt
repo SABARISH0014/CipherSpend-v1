@@ -11,7 +11,7 @@ class SmsBackgroundReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == "android.provider.Telephony.SMS_RECEIVED") {
             val bundle = intent.extras
-            val pdus = bundle?.get("pdus") as Array<*>?
+            val pdus = bundle?.get("pdus") as? Array<*>
 
             pdus?.forEach { pdu ->
                 val format = bundle.getString("format")

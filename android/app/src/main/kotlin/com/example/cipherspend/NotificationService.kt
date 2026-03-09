@@ -9,48 +9,51 @@ import org.json.JSONObject
 
 class NotificationService : NotificationListenerService() {
 
-    // 1. Solving Source Identification via Package Name
     private val UPI_APPS = mapOf(
+        // UPI Apps
         "com.google.android.apps.nbu.paisa.user" to "GPay",
         "com.phonepe.app" to "PhonePe",
         "net.one97.paytm" to "Paytm",
         "in.org.npci.upiapp" to "BHIM",
-        "com.freecharge.android" to "Freecharge",
-        "com.amazon.mShop.android.shopping" to "AmazonPay"
+        // Bank Apps (The Safety Net)
+        "com.sbi.SBIFreedomPlus" to "SBI YONO",
+        "com.snapwork.hdfc" to "HDFC Bank",
+        "com.csam.icici.bank.imobile" to "ICICI iMobile",
+        "com.dreamplug.androidapp" to "Cred"
     )
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
 
         val packageName = sbn.packageName
-        
-        // 2. Filter: Only listen to financial apps
         if (!UPI_APPS.containsKey(packageName)) return
 
         val extras = sbn.notification.extras
         val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
-        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
+        var text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         
-        // 3. Filter: Only capture transaction confirmations (Ignore "Check balance", "Offers")
-        // We look for currency symbols or specific keywords
-        if (isValidTransaction(title, text)) {
-            
-            // 4. Solving the "Missing Date" Problem: Use System Timestamp
-            val preciseTimestamp = sbn.postTime 
-            
-            // 5. Normalizing the Source
-            val senderName = UPI_APPS[packageName] ?: "UPI"
+        // [FIX] Android 13+ often hides the full payment string in expanded BIG_TEXT
+        val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString() ?: ""
+        if (bigText.isNotEmpty() && bigText.length > text.length) {
+            text = bigText
+        }
 
-            // 6. Persistence: Save to the SAME cache SMS uses (Hybrid Redundancy)
+        if (isValidTransaction(title, text)) {
+            val preciseTimestamp = sbn.postTime 
+            val senderName = UPI_APPS[packageName] ?: "UPI"
             cacheData(senderName, "$title $text", preciseTimestamp)
         }
     }
 
     private fun isValidTransaction(title: String, text: String): Boolean {
         val combined = "$title $text".lowercase()
-        // Must contain money symbol OR "paid/sent" AND digits
-        val hasMoney = combined.contains("₹") || combined.contains("rs.") || combined.contains("inr")
-        val hasAction = combined.contains("paid") || combined.contains("sent") || combined.contains("debited")
+        val hasMoney = combined.contains("₹") || combined.contains("rs") || combined.contains("inr")
+        // Added 'payment' and 'successful' to catch all GPay formats
+        val hasAction = combined.contains("paid") || 
+                        combined.contains("sent") || 
+                        combined.contains("debited") || 
+                        combined.contains("payment") || 
+                        combined.contains("successful")
         return hasMoney && hasAction
     }
 
@@ -62,8 +65,6 @@ class NotificationService : NotificationListenerService() {
             val jsonArray = JSONArray(existingCache)
             val newMsg = JSONObject()
 
-            // We format this exactly like an SMS so the Flutter side 
-            // doesn't know (or care) where it came from.
             newMsg.put("sender", sender)
             newMsg.put("body", body)
             newMsg.put("timestamp", timestamp)
