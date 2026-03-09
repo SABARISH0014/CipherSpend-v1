@@ -155,7 +155,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
       );
 
       if (isEnabled) {
-        // Yes -> Ask Dedupe Preference (Instead of jumping to Sync)
+        setState(
+          () => _waitingForListenerPermission = false,
+        ); // <--- ADD THIS LINE
         _askDedupePreference();
       } else {
         // No -> Stop and ask User
