@@ -48,6 +48,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _nameController.dispose();
+    _budgetController.dispose();
+    _salaryDateController.dispose();
     super.dispose();
   }
 
@@ -141,47 +144,36 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     await Permission.sms.request();
 
     // Start the Permission Chain
-    await _checkListenerAndProceed();
+    await _checkStorageAndProceed();
   }
 
-  // --- STEP 1: NOTIFICATION LISTENER ---
-  Future<void> _checkListenerAndProceed() async {
+  // --- STEP 1: STORAGE ACCESS ---
+  Future<void> _checkStorageAndProceed() async {
     try {
-      final bool isEnabled = await platform.invokeMethod(
-        'isNotificationListenerEnabled',
-      );
-
-      if (isEnabled) {
-        setState(() => _waitingForListenerPermission = false);
-        _askSmartPromptAndProceed();
+      if (await Permission.storage.isGranted ||
+          await Permission.manageExternalStorage.isGranted) {
+        _checkListenerAndProceed();
       } else {
         if (mounted) {
-          setState(() {
-            _waitingForListenerPermission = true;
-          });
-
           showDialog(
             context: context,
             barrierDismissible: false,
             builder: (ctx) => AlertDialog(
               backgroundColor: Constants.colorSurface,
               title: const Text(
-                "Step 1: Enable UPI Tracking",
+                "Step 1: Storage Access",
                 style: TextStyle(color: Colors.white),
               ),
               content: const Text(
-                "To track GPay, PhonePe, and Paytm transactions automatically, CipherSpend needs 'Notification Access'.\n\n"
-                "1. Tap ENABLE below.\n"
-                "2. Find 'CipherSpend' in the list.\n"
-                "3. Toggle it ON and press Allow.",
+                "CipherSpend requires storage access to generate and export your monthly visual reports to PDF and CSV formats.\n\n"
+                "Tap ALLOW on the next prompt to enable this.",
                 style: TextStyle(color: Colors.white70),
               ),
               actions: [
                 TextButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    setState(() => _waitingForListenerPermission = false);
-                    _askSmartPromptAndProceed();
+                    _checkListenerAndProceed(); // Skip
                   },
                   child: const Text(
                     "SKIP",
@@ -194,10 +186,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                   ),
                   onPressed: () async {
                     Navigator.pop(ctx);
-                    await platform.invokeMethod('openNotificationSettings');
+                    await [
+                      Permission.storage,
+                      Permission.manageExternalStorage,
+                    ].request();
+                    _checkListenerAndProceed(); // Move to next step
                   },
                   child: const Text(
-                    "ENABLE",
+                    "ALLOW",
                     style: TextStyle(
                       color: Colors.black,
                       fontWeight: FontWeight.bold,
@@ -210,84 +206,157 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
         }
       }
     } catch (e) {
-      _askSmartPromptAndProceed();
+      _checkListenerAndProceed();
     }
   }
 
-  // --- STEP 2: SMART PROMPTS (USAGE ACCESS) ---
-  Future<void> _askSmartPromptAndProceed() async {
+  // --- STEP 2: NOTIFICATION LISTENER ---
+  Future<void> _checkListenerAndProceed() async {
+    bool isEnabled = false;
     try {
-      bool hasAccess = await platform.invokeMethod('hasUsageAccess');
-
-      if (hasAccess) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('smart_prompt_enabled', true);
-        _askDedupePreference();
-      } else {
-        if (mounted) {
-          setState(() {
-            _waitingForUsagePermission = true;
-          });
-
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (ctx) => AlertDialog(
-              backgroundColor: Constants.colorSurface,
-              title: const Text(
-                "Step 2: Smart Prompts",
-                style: TextStyle(color: Colors.white),
-              ),
-              content: const Text(
-                "If a payment app doesn't send a notification, CipherSpend can detect when you close the app and proactively ask if you made a payment.\n\n"
-                "To enable this, we need 'Usage Access'.\n"
-                "1. Tap ENABLE below.\n"
-                "2. Find 'CipherSpend' and turn ON 'Permit usage access'.",
-                style: TextStyle(color: Colors.white70),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    setState(() => _waitingForUsagePermission = false);
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setBool('smart_prompt_enabled', false);
-                    _askDedupePreference();
-                  },
-                  child: const Text(
-                    "SKIP",
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Constants.colorPrimary,
-                  ),
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setBool('smart_prompt_enabled', true);
-                    await platform.invokeMethod('openUsageAccessSettings');
-                  },
-                  child: const Text(
-                    "ENABLE",
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-      }
+      isEnabled = await platform.invokeMethod('isNotificationListenerEnabled');
     } catch (e) {
-      _askDedupePreference();
+      print("Warning: Native check failed - $e");
+      isEnabled = false; 
+    }
+
+    if (isEnabled) {
+      _askSmartPromptAndProceed();
+    } else {
+      if (!mounted) return; 
+      
+      // [FIX] Removed early flag assignment here
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: Constants.colorSurface,
+          title: const Text(
+            "Step 2: Enable UPI Tracking",
+            style: TextStyle(color: Colors.white),
+          ),
+          content: const Text(
+            "To track GPay, PhonePe, and Paytm transactions automatically, CipherSpend needs 'Notification Access'.\n\n"
+            "1. Tap ENABLE below.\n"
+            "2. Find 'CipherSpend' in the list.\n"
+            "3. Toggle it ON and press Allow.",
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _askSmartPromptAndProceed();
+              },
+              child: const Text(
+                "SKIP",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Constants.colorPrimary,
+              ),
+              onPressed: () async {
+                // [FIX] The flag is now safely assigned ONLY when the user clicks the button
+                setState(() {
+                  _waitingForListenerPermission = true;
+                });
+                Navigator.pop(ctx);
+                await platform.invokeMethod('openNotificationSettings');
+              },
+              child: const Text(
+                "ENABLE",
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
     }
   }
 
-  // --- STEP 3: DUPLICATE PREFERENCE ---
+  // --- STEP 3: SMART PROMPTS (USAGE ACCESS) ---
+  Future<void> _askSmartPromptAndProceed() async {
+    bool hasAccess = false;
+    try {
+      hasAccess = await platform.invokeMethod('hasUsageAccess');
+    } catch (e) {
+      print("Warning: Native check failed - $e");
+      hasAccess = false; 
+    }
+
+    if (hasAccess) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('smart_prompt_enabled', true);
+      _askDedupePreference();
+    } else {
+      if (!mounted) return;
+      
+      // [FIX] Removed early flag assignment here
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: Constants.colorSurface,
+          title: const Text(
+            "Step 3: Smart Prompts",
+            style: TextStyle(color: Colors.white),
+          ),
+          content: const Text(
+            "If a payment app doesn't send a notification, CipherSpend can detect when you close the app and proactively ask if you made a payment.\n\n"
+            "To enable this, we need 'Usage Access'.\n"
+            "1. Tap ENABLE below.\n"
+            "2. Find 'CipherSpend' and turn ON 'Permit usage access'.",
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('smart_prompt_enabled', false);
+                _askDedupePreference();
+              },
+              child: const Text(
+                "SKIP",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Constants.colorPrimary,
+              ),
+              onPressed: () async {
+                // [FIX] The flag is now safely assigned ONLY when the user clicks the button
+                setState(() {
+                  _waitingForUsagePermission = true;
+                });
+                Navigator.pop(ctx);
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('smart_prompt_enabled', true);
+                await platform.invokeMethod('openUsageAccessSettings');
+              },
+              child: const Text(
+                "ENABLE",
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  // --- STEP 4: DUPLICATE PREFERENCE ---
   Future<void> _askDedupePreference() async {
     if (!mounted) return;
 
@@ -343,7 +412,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     );
   }
 
-  // --- STEP 4: FINAL SYNC ---
+  // --- STEP 5: FINAL SYNC ---
   Future<void> _runInitialSync() async {
     setState(() {
       _isSyncing = true;

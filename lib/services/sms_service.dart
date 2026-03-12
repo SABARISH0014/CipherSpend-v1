@@ -116,9 +116,11 @@ class SmsService {
               .subtract(const Duration(days: 180))
               .millisecondsSinceEpoch;
 
-      final List<dynamic> messages = await _bridge.readSmsHistory(
+      final List<dynamic> rawMessages = await _bridge.readSmsHistory(
         since: lastSync,
       );
+      List<dynamic> messages = List.from(rawMessages);
+
       final String? cachedJson = await _bridge.getAndClearBackgroundCache();
 
       if (cachedJson != null && cachedJson != "[]") {
@@ -280,7 +282,57 @@ class SmsService {
     }
   }
 
-  // ... (Keep getTransactionsByMonth and liveTransactionStream as is) ...
+  // --- SEARCH AND FILTER ---
+  Future<List<TransactionModel>> searchTransactions({
+    String query = "",
+    DateTime? startDate,
+    DateTime? endDate,
+    String? category,
+    String? type,
+  }) async {
+    final db = await DBService().database;
+    
+    String whereClause = '1=1';
+    List<dynamic> whereArgs = [];
+
+    if (query.isNotEmpty) {
+      whereClause += ' AND (merchant LIKE ? OR body LIKE ?)';
+      whereArgs.add('%$query%');
+      whereArgs.add('%$query%');
+    }
+
+    if (startDate != null) {
+      whereClause += ' AND timestamp >= ?';
+      whereArgs.add(startDate.millisecondsSinceEpoch);
+    }
+    
+    if (endDate != null) {
+      // Add 23:59:59 to include the whole end date
+      final endOfDay = DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59, 999);
+      whereClause += ' AND timestamp <= ?';
+      whereArgs.add(endOfDay.millisecondsSinceEpoch);
+    }
+
+    if (category != null && category.isNotEmpty && category != 'All') {
+      whereClause += ' AND category = ?';
+      whereArgs.add(category);
+    }
+
+    if (type != null && type.isNotEmpty && type != 'All') {
+      whereClause += ' AND type = ?';
+      whereArgs.add(type);
+    }
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      Constants.tableTransactions,
+      where: whereClause,
+      whereArgs: whereArgs,
+      orderBy: "timestamp DESC",
+    );
+
+    return List.generate(maps.length, (i) => TransactionModel.fromMap(maps[i]));
+  }
+
   Future<List<TransactionModel>> getTransactionsByMonth(DateTime month) async {
     final db = await DBService().database;
     final start = DateTime(month.year, month.month, 1).millisecondsSinceEpoch;

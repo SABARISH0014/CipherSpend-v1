@@ -26,13 +26,36 @@ class LocalNotificationService {
       android: androidSettings,
     );
 
-    // [FIX 1] flutter_local_notifications v20+ requires named arguments
-    // CORRECT
+    // Initialize the plugin
     await _notificationsPlugin.initialize(settings: initSettings);
+
+    // [FIX] Explicitly ask for Android 13+ Notification Permission via the plugin
+    await _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.requestNotificationsPermission();
+
+    // [FIX] Explicitly create the Notification Channel for Android 8.0+
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'cipherspend_insights', // id
+      'Financial Insights', // name
+      description: 'Smart alerts about your budget and spending',
+      importance: Importance.max,
+      enableLights: true,
+      ledColor: Color(0xFF00E676),
+    );
+
+    await _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(channel);
+
     _isInitialized = true;
   }
 
-  // Define the style of the notification (Heads-up, high priority)
+  // Define the style of the notification using the SAME channel ID
   NotificationDetails _getChannelDetails() {
     return const NotificationDetails(
       android: AndroidNotificationDetails(

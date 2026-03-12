@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/transaction_model.dart';
 import '../utils/constants.dart';
@@ -13,7 +14,25 @@ class VisualReportScreen extends StatefulWidget {
   State<VisualReportScreen> createState() => _VisualReportScreenState();
 }
 
-class _VisualReportScreenState extends State<VisualReportScreen> {
+class _VisualReportScreenState extends State<VisualReportScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2), // Speed of the flow
+    )..repeat(); // Loop indefinitely
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     // 1. Group Data by Category
@@ -48,13 +67,19 @@ class _VisualReportScreenState extends State<VisualReportScreen> {
 
             // THE CHART CANVAS
             Center(
-              child: CustomPaint(
-                size: Size(MediaQuery.of(context).size.width, 400),
-                painter: SankeyPainter(
-                  budget: widget.budget,
-                  totalSpent: totalSpent,
-                  categories: sortedEntries,
-                ),
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, child) {
+                  return CustomPaint(
+                    size: Size(MediaQuery.of(context).size.width, 400),
+                    painter: SankeyPainter(
+                      budget: widget.budget,
+                      totalSpent: totalSpent,
+                      categories: sortedEntries,
+                      animationValue: _controller.value,
+                    ),
+                  );
+                },
               ),
             ),
 
@@ -115,11 +140,13 @@ class SankeyPainter extends CustomPainter {
   final double budget;
   final double totalSpent;
   final List<MapEntry<String, double>> categories;
+  final double animationValue;
 
   SankeyPainter(
       {required this.budget,
       required this.totalSpent,
-      required this.categories});
+      required this.categories,
+      required this.animationValue});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -152,7 +179,9 @@ class SankeyPainter extends CustomPainter {
       if (catHeight < 2) catHeight = 2;
 
       // Draw Right Bar
-      paint.color = _getColor(entry.key);
+      Color categoryColor = _getColor(entry.key);
+      paint.color = categoryColor;
+      
       Rect rightRect = Rect.fromLTWH(rightX, currentY, barWidth, catHeight);
       canvas.drawRRect(
           RRect.fromRectAndRadius(rightRect, const Radius.circular(4)), paint);
@@ -170,14 +199,50 @@ class SankeyPainter extends CustomPainter {
           currentY + (catHeight / 2) // End at center of right node
           );
 
-      // Stroke style for the stream
+      // Background stream
       Paint flowPaint = Paint()
-        ..color = _getColor(entry.key).withOpacity(0.4)
+        ..color = categoryColor.withOpacity(0.2) // Lighter background
         ..style = PaintingStyle.stroke
         ..strokeWidth = catHeight * 0.8 // Thickness based on amount
         ..strokeCap = StrokeCap.round;
 
       canvas.drawPath(path, flowPaint);
+
+      // --- ANIMATED PARTICLES STREAM ---
+      // We extract metrics to draw glowing "data segments" moving along the path.
+      if (path.computeMetrics().isNotEmpty) {
+        ui.PathMetrics pathMetrics = path.computeMetrics();
+        ui.PathMetric metric = pathMetrics.first;
+        
+        double pathLength = metric.length;
+        
+        // Define animation parameters
+        int numParticles = 3; // Number of particles flowing on this path
+        double dashLength = pathLength * 0.15; // Length of each glowing dash
+        
+        Paint particlePaint = Paint()
+          ..color = categoryColor.withOpacity(0.8) // Brighter for flowing data
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = catHeight * 0.6 // Slightly thinner than bg stream
+          ..strokeCap = StrokeCap.round;
+          
+        for (int i = 0; i < numParticles; i++) {
+            // Offset logic for staggered looping particles
+            double phaseOffset = i / numParticles; 
+            double currentProgress = (animationValue + phaseOffset) % 1.0;
+            
+            double startDistance = (pathLength + dashLength) * currentProgress - dashLength;
+            double endDistance = startDistance + dashLength;
+            
+            // Extract the moving path segment
+            ui.Path extractPath = metric.extractPath(
+                startDistance.clamp(0.0, pathLength), 
+                endDistance.clamp(0.0, pathLength)
+            );
+            
+            canvas.drawPath(extractPath, particlePaint);
+        }
+      }
 
       currentY += catHeight + 5; // Add small gap
     }
@@ -203,5 +268,9 @@ class SankeyPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant SankeyPainter oldDelegate) {
+     return oldDelegate.animationValue != animationValue || 
+            oldDelegate.budget != budget ||
+            oldDelegate.totalSpent != totalSpent;
+  }
 }

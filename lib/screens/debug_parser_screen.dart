@@ -6,7 +6,8 @@ import '../utils/constants.dart';
 import 'interactive_training_screen.dart';
 
 class DebugParserScreen extends StatefulWidget {
-  const DebugParserScreen({super.key});
+  final String? initialSmsBody;
+  const DebugParserScreen({super.key, this.initialSmsBody});
 
   @override
   State<DebugParserScreen> createState() => _DebugParserScreenState();
@@ -23,6 +24,9 @@ class _DebugParserScreenState extends State<DebugParserScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialSmsBody != null) {
+      _smsController.text = widget.initialSmsBody!;
+    }
     _ensureAiLoaded();
   }
 

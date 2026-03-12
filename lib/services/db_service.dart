@@ -38,11 +38,19 @@ class DBService {
     return await openDatabase(
       path,
       password: password,
-      version: 3,
+      version: 5,
       onOpen: (db) async {
-        // [THE FIX] Bulletproof fallback: Ensures the blacklist table exists every time the app opens
+        // [THE FIX] Bulletproof fallback: Ensures tables exist every time the app opens (useful for flutter hot reloads)
         await db.execute(
             'CREATE TABLE IF NOT EXISTS ignored_hashes(hash TEXT PRIMARY KEY)');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS app_notifications(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            body TEXT,
+            timestamp INTEGER
+          )
+        ''');
       },
       onCreate: (db, version) async {
         await db.execute('''
@@ -86,6 +94,16 @@ class DBService {
           )
         ''');
 
+        // [NEW] App Insights Notifications Hub
+        await db.execute('''
+          CREATE TABLE app_notifications(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            body TEXT,
+            timestamp INTEGER
+          )
+        ''');
+
         await db.transaction((txn) async {
           List<String> defaults = [
             'Food',
@@ -119,8 +137,50 @@ class DBService {
           ''');
           print("🔄 Database upgraded to v3: Added Custom Rules Table");
         }
+        if (oldVersion < 4) {
+          // Drop the old v4 raw_messages table
+          await db.execute('DROP TABLE IF EXISTS raw_messages');
+        }
+        if (oldVersion < 5) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS app_notifications(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              title TEXT,
+              body TEXT,
+              timestamp INTEGER
+            )
+          ''');
+          print("🔄 Database upgraded to v5: Added App Notifications Table");
+        }
       },
     );
+  }
+
+  // --- Week 4 Helper Methods ---
+
+  Future<void> saveAppNotification(String title, String body, int timestamp) async {
+    final db = await database;
+    await db.insert('app_notifications', {
+      'title': title,
+      'body': body,
+      'timestamp': timestamp,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getAppNotifications() async {
+    final db = await database;
+    return await db.query('app_notifications', orderBy: 'timestamp DESC');
+  }
+
+  Future<int> getAppNotificationsCount() async {
+    final db = await database;
+    var result = await db.rawQuery('SELECT COUNT(*) as count FROM app_notifications');
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  Future<void> deleteAppNotification(int id) async {
+    final db = await database;
+    await db.delete('app_notifications', where: 'id = ?', whereArgs: [id]);
   }
 
   // --- Week 3 Helper Methods ---

@@ -13,6 +13,8 @@ import 'settings_screen.dart';
 import '../services/notification_service.dart';
 import 'manual_entry_screen.dart'; // <--- ADD THIS
 import 'visual_report_screen.dart';
+import 'search_export_screen.dart'; // <--- NEW EXPORT SCREEN
+import 'app_notifications_screen.dart'; // <--- NEW NOTIFICATIONS HUB
 import 'package:permission_handler/permission_handler.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -55,12 +57,12 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   DateTime _selectedMonth = DateTime.now();
   bool _isLoading = true;
+  int _appNotificationCount = 0; // [NEW] Central Insights Hub Counter
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    LocalNotificationService().init(); // [NEW] Start listening to lifecycle
     _loadData();
     _listenToLiveSMS();
   }
@@ -109,6 +111,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           body:
               "You've spent ₹${spent.toStringAsFixed(0)}, exceeding your ₹${budget.toStringAsFixed(0)} limit. Time to activate stealth mode!",
         );
+        await DBService().saveAppNotification("🚨 Budget Breached!", "You've spent ₹${spent.toStringAsFixed(0)}, exceeding your ₹${budget.toStringAsFixed(0)} limit. Time to activate stealth mode!", DateTime.now().millisecondsSinceEpoch);
         await prefs.setBool('exceeded_alert_sent_$todayStr', true);
         return;
       }
@@ -125,6 +128,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         body:
             "You've used ${(progress * 100).toStringAsFixed(0)}% of your budget. Slow down on the spending!",
       );
+      await DBService().saveAppNotification("⚠️ Approaching Red Zone", "You've used ${(progress * 100).toStringAsFixed(0)}% of your budget. Slow down on the spending!", DateTime.now().millisecondsSinceEpoch);
       await prefs.setString('last_insight_date', todayStr);
       return;
     }
@@ -137,6 +141,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         body:
             "At your current daily rate, you will exceed your budget by ₹${(projected - budget).toStringAsFixed(0)} this month.",
       );
+      await DBService().saveAppNotification("🔮 AI Forecast Warning", "At your current daily rate, you will exceed your budget by ₹${(projected - budget).toStringAsFixed(0)} this month.", DateTime.now().millisecondsSinceEpoch);
       await prefs.setString('last_insight_date', todayStr);
       return;
     }
@@ -150,6 +155,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         body:
             "You've dropped ₹${topAmount.toStringAsFixed(0)} on $topCategory. Is it a necessity or a luxury?",
       );
+      await DBService().saveAppNotification("📊 Top Spend: $topCategory", "You've dropped ₹${topAmount.toStringAsFixed(0)} on $topCategory. Is it a necessity or a luxury?", DateTime.now().millisecondsSinceEpoch);
       await prefs.setString('last_insight_date', todayStr);
       return;
     }
@@ -306,6 +312,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       _isLoading = true;
     });
 
+    // Make sure Notification Service is fully initialized before generating insights
+    await LocalNotificationService().init();
+
     // 1. DELTA SYNC: Catch up on missed messages (SMS + Notifications from Cache)
     await _smsService.silentBackgroundSync();
 
@@ -314,17 +323,14 @@ class _DashboardScreenState extends State<DashboardScreen>
     final forecastData = await _predictionService.getForecastForMonth(
       _selectedMonth,
     );
+    final appNotifCount = await DBService().getAppNotificationsCount();
 
     if (mounted) {
-      setState(() {
-        _transactions = list;
-        _forecast = forecastData;
-        _isLoading = false;
-      });
       if (mounted) {
         setState(() {
           _transactions = list;
           _forecast = forecastData;
+          _appNotificationCount = appNotifCount;
           _isLoading = false;
         });
 
@@ -616,35 +622,41 @@ class _DashboardScreenState extends State<DashboardScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.trending_up,
-                      color: Colors.redAccent,
-                      size: 14,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      "Most Spent: $topCategory",
-                      style: const TextStyle(
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.trending_up,
                         color: Colors.redAccent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                        size: 14,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          "Most Spent: $topCategory",
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               InkWell(
                 onTap: _showPredictionDialog,
                 borderRadius: BorderRadius.circular(8),
@@ -890,9 +902,29 @@ class _DashboardScreenState extends State<DashboardScreen>
         backgroundColor: Constants.colorSurface,
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_active, color: Colors.amber),
-            tooltip: "Enable Notification Listener",
-            onPressed: _openNotificationSettings,
+            icon: Badge(
+              isLabelVisible: _appNotificationCount > 0,
+              label: Text(_appNotificationCount.toString()),
+              child: const Icon(Icons.notifications_active, color: Colors.amber),
+            ),
+            tooltip: "Insights Hub",
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AppNotificationsScreen()),
+              );
+              _loadData(); // Refresh badge on return
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.search, color: Colors.white),
+            tooltip: "Search & Export",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SearchExportScreen()),
+              );
+            },
           ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
           IconButton(
