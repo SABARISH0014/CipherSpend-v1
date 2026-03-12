@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Required for MethodChannel
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -15,7 +15,6 @@ class ProfileSetupScreen extends StatefulWidget {
   State<ProfileSetupScreen> createState() => _ProfileSetupScreenState();
 }
 
-// [CHANGED] Added 'with WidgetsBindingObserver' to listen for app resume
 class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     with WidgetsBindingObserver {
   final TextEditingController _nameController = TextEditingController();
@@ -25,42 +24,44 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
   final LocalAuthentication _localAuth = LocalAuthentication();
   final SmsService _smsService = SmsService();
 
-  // [NEW] Native Bridge to talk to MainActivity
   static const platform = MethodChannel('com.example.cipherspend/sms');
 
   String _errorMessage = "";
   bool _isBiometricRegistered = false;
 
-  // Sync State
   bool _isSyncing = false;
   int _totalToSync = 0;
   int _currentSynced = 0;
 
-  // [NEW] Track if we are waiting for user to return from settings
+  // Track which settings page the user is returning from
   bool _waitingForListenerPermission = false;
+  bool _waitingForUsagePermission = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(
-      this,
-    ); // Listen for app lifecycle changes
+    WidgetsBinding.instance.addObserver(this);
     int today = DateTime.now().day;
     _salaryDateController.text = today.toString();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this); // Stop listening
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  // [NEW] Detect when user returns from Settings to the App
+  // Detect when user returns from Android Settings
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _waitingForListenerPermission) {
-      // User came back, check permission again automatically
-      _checkListenerAndProceed();
+    if (state == AppLifecycleState.resumed) {
+      if (_waitingForListenerPermission) {
+        setState(() => _waitingForListenerPermission = false);
+        _askSmartPromptAndProceed(); // Move to next step in the chain
+      } else if (_waitingForUsagePermission) {
+        setState(() => _waitingForUsagePermission = false);
+        _askDedupePreference(); // Move to next step in the chain
+      }
     }
   }
 
@@ -100,7 +101,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
   }
 
   Future<void> _completeSetup() async {
-    // 1. Validation Logic
     if (!_isBiometricRegistered) {
       setState(
         () => _errorMessage = "Please register your biometric lock first.",
@@ -130,7 +130,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
       return;
     }
 
-    // 2. Save Preference Data
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(Constants.prefUserName, name);
     await prefs.setDouble(Constants.prefMonthlyBudget, budget);
@@ -138,29 +137,24 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     await prefs.setBool('prefBiometricEnabled', true);
     await prefs.setBool(Constants.prefIsSetupComplete, true);
 
-    // 3. ASK PERMISSIONS
-
-    // A. Request SMS Permission
+    // Ask for SMS Permission first
     await Permission.sms.request();
 
-    // B. Check Notification Listener (The Hybrid Engine)
+    // Start the Permission Chain
     await _checkListenerAndProceed();
   }
 
+  // --- STEP 1: NOTIFICATION LISTENER ---
   Future<void> _checkListenerAndProceed() async {
     try {
-      // Ask Android: Is "CipherSpend" allowed to read notifications?
       final bool isEnabled = await platform.invokeMethod(
         'isNotificationListenerEnabled',
       );
 
       if (isEnabled) {
-        setState(
-          () => _waitingForListenerPermission = false,
-        ); // <--- ADD THIS LINE
-        _askDedupePreference();
+        setState(() => _waitingForListenerPermission = false);
+        _askSmartPromptAndProceed();
       } else {
-        // No -> Stop and ask User
         if (mounted) {
           setState(() {
             _waitingForListenerPermission = true;
@@ -172,7 +166,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
             builder: (ctx) => AlertDialog(
               backgroundColor: Constants.colorSurface,
               title: const Text(
-                "Enable UPI Tracking",
+                "Step 1: Enable UPI Tracking",
                 style: TextStyle(color: Colors.white),
               ),
               content: const Text(
@@ -186,8 +180,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                 TextButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    // User declined, proceed to Dedupe step
-                    _askDedupePreference();
+                    setState(() => _waitingForListenerPermission = false);
+                    _askSmartPromptAndProceed();
                   },
                   child: const Text(
                     "SKIP",
@@ -200,9 +194,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                   ),
                   onPressed: () async {
                     Navigator.pop(ctx);
-                    // Open Android Settings Page
                     await platform.invokeMethod('openNotificationSettings');
-                    // We wait for user to come back (handled by didChangeAppLifecycleState)
                   },
                   child: const Text(
                     "ENABLE",
@@ -218,11 +210,84 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
         }
       }
     } catch (e) {
-      print("Error checking listener: $e");
-      _askDedupePreference(); // Fallback if check fails
+      _askSmartPromptAndProceed();
     }
   }
 
+  // --- STEP 2: SMART PROMPTS (USAGE ACCESS) ---
+  Future<void> _askSmartPromptAndProceed() async {
+    try {
+      bool hasAccess = await platform.invokeMethod('hasUsageAccess');
+
+      if (hasAccess) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('smart_prompt_enabled', true);
+        _askDedupePreference();
+      } else {
+        if (mounted) {
+          setState(() {
+            _waitingForUsagePermission = true;
+          });
+
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: Constants.colorSurface,
+              title: const Text(
+                "Step 2: Smart Prompts",
+                style: TextStyle(color: Colors.white),
+              ),
+              content: const Text(
+                "If a payment app doesn't send a notification, CipherSpend can detect when you close the app and proactively ask if you made a payment.\n\n"
+                "To enable this, we need 'Usage Access'.\n"
+                "1. Tap ENABLE below.\n"
+                "2. Find 'CipherSpend' and turn ON 'Permit usage access'.",
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    setState(() => _waitingForUsagePermission = false);
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('smart_prompt_enabled', false);
+                    _askDedupePreference();
+                  },
+                  child: const Text(
+                    "SKIP",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Constants.colorPrimary,
+                  ),
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('smart_prompt_enabled', true);
+                    await platform.invokeMethod('openUsageAccessSettings');
+                  },
+                  child: const Text(
+                    "ENABLE",
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      _askDedupePreference();
+    }
+  }
+
+  // --- STEP 3: DUPLICATE PREFERENCE ---
   Future<void> _askDedupePreference() async {
     if (!mounted) return;
 
@@ -253,7 +318,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
               Navigator.pop(ctx);
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('dedupe_rule', 'ask');
-              _runInitialSync(); // Start sync after saving
+              _runInitialSync();
             },
             child: const Text("ASK ME", style: TextStyle(color: Colors.grey)),
           ),
@@ -266,7 +331,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
               Navigator.pop(ctx);
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('dedupe_rule', 'auto_drop');
-              _runInitialSync(); // Start sync after saving
+              _runInitialSync();
             },
             child: const Text(
               "AUTO-DROP",
@@ -278,14 +343,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     );
   }
 
-  // [NEW] The actual sync logic moved to a separate function
+  // --- STEP 4: FINAL SYNC ---
   Future<void> _runInitialSync() async {
     setState(() {
       _isSyncing = true;
-      _waitingForListenerPermission = false;
     });
 
-    // Run full history sync (180 days default)
     await _smsService.syncHistory(
       onProgress: (current, total) {
         if (mounted) {
@@ -311,7 +374,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
       backgroundColor: Constants.colorBackground,
       body: Stack(
         children: [
-          // Main Form
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -517,7 +579,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
             ),
           ),
 
-          // Overlay for Syncing
           if (_isSyncing)
             SyncOverlay(
               total: _totalToSync,

@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart';
 import '../models/transaction_model.dart';
 import 'ai_service.dart';
-import 'package:crypto/crypto.dart';
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
+import 'db_service.dart';
 
 class ParserService {
   static final RegExp _amountRegex = RegExp(
@@ -56,9 +57,47 @@ class ParserService {
     return false;
   }
 
-  static TransactionModel? parseSMS(String sender, String body, int timestamp) {
+  static Future<TransactionModel?> parseSMS(String sender, String body, int timestamp) async {
     String cleanBody = body.replaceAll(RegExp(r'\s+'), ' ').trim();
     String lowerBody = cleanBody.toLowerCase();
+
+    // --- CHECK CUSTOM RULES FIRST ---
+    try {
+      final customRules = await DBService().getCustomRules(sender);
+      for (String patternStr in customRules) {
+        final regExp = RegExp(patternStr, caseSensitive: false);
+        final match = regExp.firstMatch(cleanBody);
+        if (match != null) {
+          double amount = 0.0;
+          String merchant = "Unknown Merchant";
+          
+          try {
+            amount = double.tryParse(match.namedGroup('amount')?.replaceAll(',', '') ?? '0') ?? 0.0;
+          } catch (_) {}
+          
+          try {
+            merchant = match.namedGroup('merchant') ?? "Unknown Merchant";
+          } catch (_) {}
+
+          if (amount > 0) {
+            String hash = generateHash(sender, cleanBody, timestamp);
+            return TransactionModel(
+              hash: hash,
+              sender: sender,
+              body: cleanBody,
+              amount: amount,
+              category: "Uncategorized",
+              type: "Unknown",
+              timestamp: timestamp,
+              merchant: merchant,
+            );
+          }
+        }
+      }
+    } catch (e) {
+      print("Error processing custom rules: $e");
+    }
+    // --- END CUSTOM RULES CHECK ---
 
     bool isNotification = [
       "GPay",

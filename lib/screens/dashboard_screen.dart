@@ -10,6 +10,8 @@ import '../models/transaction_model.dart';
 import '../utils/constants.dart';
 import 'transaction_detail_screen.dart';
 import 'settings_screen.dart';
+import '../services/notification_service.dart';
+import 'manual_entry_screen.dart'; // <--- ADD THIS
 import 'visual_report_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -57,9 +59,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(
-      this,
-    ); // [NEW] Start listening to lifecycle
+    WidgetsBinding.instance.addObserver(this);
+    LocalNotificationService().init(); // [NEW] Start listening to lifecycle
     _loadData();
     _listenToLiveSMS();
   }
@@ -78,6 +79,79 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (state == AppLifecycleState.resumed) {
       _loadData(); // Sync any background messages
       _checkSmartPrompt(); // Ask Android if they just used a payment app
+    }
+  }
+
+  // [NEW] The Insight Engine
+  Future<void> _generateSmartInsights() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Check if we already sent a daily insight today
+    String todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    String lastInsightDate = prefs.getString('last_insight_date') ?? "";
+
+    double spent = _forecast['spent'] ?? 0;
+    double budget = _forecast['budget'] ?? 1;
+    double projected = _forecast['projected'] ?? 0;
+    String topCategory = _forecast['top_category'] ?? "None";
+    double topAmount = _forecast['top_category_amount'] ?? 0;
+
+    double progress = spent / budget;
+
+    // 1. CRITICAL ALERT: Budget Exceeded (Will bypass the daily limit)
+    if (progress >= 1.0) {
+      bool exceededAlertSent =
+          prefs.getBool('exceeded_alert_sent_$todayStr') ?? false;
+      if (!exceededAlertSent) {
+        await LocalNotificationService().showInsightNotification(
+          id: 1,
+          title: "🚨 Budget Breached!",
+          body:
+              "You've spent ₹${spent.toStringAsFixed(0)}, exceeding your ₹${budget.toStringAsFixed(0)} limit. Time to activate stealth mode!",
+        );
+        await prefs.setBool('exceeded_alert_sent_$todayStr', true);
+        return;
+      }
+    }
+
+    // If we already sent a normal insight today, stop here.
+    if (lastInsightDate == todayStr) return;
+
+    // 2. WARNING ALERT: 80% Threshold
+    if (progress >= 0.8 && progress < 1.0) {
+      await LocalNotificationService().showInsightNotification(
+        id: 2,
+        title: "⚠️ Approaching Red Zone",
+        body:
+            "You've used ${(progress * 100).toStringAsFixed(0)}% of your budget. Slow down on the spending!",
+      );
+      await prefs.setString('last_insight_date', todayStr);
+      return;
+    }
+
+    // 3. PREDICTION ALERT: High Run Rate
+    if (projected > budget && progress < 0.8) {
+      await LocalNotificationService().showInsightNotification(
+        id: 3,
+        title: "🔮 AI Forecast Warning",
+        body:
+            "At your current daily rate, you will exceed your budget by ₹${(projected - budget).toStringAsFixed(0)} this month.",
+      );
+      await prefs.setString('last_insight_date', todayStr);
+      return;
+    }
+
+    // 4. BEHAVIORAL ALERT: Top Category Insight
+    if (topCategory != "None" && (topAmount / spent) > 0.4) {
+      // If one category is more than 40% of total spend
+      await LocalNotificationService().showInsightNotification(
+        id: 4,
+        title: "📊 Top Spend: $topCategory",
+        body:
+            "You've dropped ₹${topAmount.toStringAsFixed(0)} on $topCategory. Is it a necessity or a luxury?",
+      );
+      await prefs.setString('last_insight_date', todayStr);
+      return;
     }
   }
 
@@ -247,6 +321,16 @@ class _DashboardScreenState extends State<DashboardScreen>
         _forecast = forecastData;
         _isLoading = false;
       });
+      if (mounted) {
+        setState(() {
+          _transactions = list;
+          _forecast = forecastData;
+          _isLoading = false;
+        });
+
+        // [NEW] Fire the insight engine after data is ready
+        _generateSmartInsights();
+      }
     }
   }
 
@@ -833,6 +917,24 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
         ],
+      ),
+
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Constants.colorPrimary,
+        foregroundColor: Colors.black,
+        elevation: 4,
+        child: const Icon(Icons.add),
+        onPressed: () async {
+          // Navigate to Manual Entry, wait for result
+          bool? didAdd = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ManualEntryScreen()),
+          );
+          // If the user saved a transaction, refresh the dashboard!
+          if (didAdd == true) {
+            _loadData();
+          }
+        },
       ),
       body: Column(
         children: [

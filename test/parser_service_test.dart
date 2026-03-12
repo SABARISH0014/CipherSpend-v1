@@ -122,4 +122,43 @@ void main() {
       expect(hash1, isNot(equals(hash2)));
     });
   });
+
+  group('Interactive Tap-to-Train Regex System Validation', () {
+    test('Generated regex successfully captures amount and merchant', () {
+      // Simulate raw SMS list split by space
+      List<String> words = ["Alert:", "Debited", "rs", "400.50", "at", "Amazon", "store"];
+      
+      // Simulate user tagging 400.50 (index 3) as Amount, and Amazon (index 5) as Merchant
+      int amountIndex = 3;
+      int merchantIndex = 5;
+      
+      // Generation logic exactly as in interactive_training_screen.dart
+      List<String> regexParts = [];
+      for (int i = 0; i < words.length; i++) {
+        if (i == amountIndex) {
+          regexParts.add(r'(?<amount>\d+(?:,\d+)*(?:\.\d+)?)');
+        } else if (i == merchantIndex) {
+          regexParts.add(r'(?<merchant>.+?)');
+        } else {
+          regexParts.add(RegExp.escape(words[i]));
+        }
+      }
+      String finalRegex = regexParts.join(r'\s+');
+      
+      // Verify regex construction
+      expect(
+        finalRegex, 
+        r'Alert:\s+Debited\s+rs\s+(?<amount>\d+(?:,\d+)*(?:\.\d+)?)\s+at\s+(?<merchant>.+?)\s+store'
+      );
+      
+      // Verify the generated regex works on the string
+      String rawSMS = "Alert: Debited rs 400.50 at Amazon store";
+      final regExp = RegExp(finalRegex, caseSensitive: false);
+      final match = regExp.firstMatch(rawSMS);
+      
+      expect(match, isNotNull);
+      expect(match!.namedGroup('amount'), "400.50");
+      expect(match.namedGroup('merchant'), "Amazon");
+    });
+  });
 }

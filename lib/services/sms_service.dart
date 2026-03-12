@@ -143,7 +143,7 @@ class SmsService {
         int timestamp = msg['timestamp'] ?? 0;
         if (timestamp > highestTimestamp) highestTimestamp = timestamp;
 
-        var txn = ParserService.parseSMS(
+        var txn = await ParserService.parseSMS(
           msg['sender'] ?? '',
           msg['body'] ?? '',
           timestamp,
@@ -217,7 +217,7 @@ class SmsService {
         int timestamp = msg['timestamp'] ?? 0;
         if (timestamp > highestTimestamp) highestTimestamp = timestamp;
 
-        var txn = ParserService.parseSMS(
+        var txn = await ParserService.parseSMS(
           msg['sender'] ?? '',
           msg['body'] ?? '',
           timestamp,
@@ -297,9 +297,9 @@ class SmsService {
   }
 
   Stream<TransactionModel?> get liveTransactionStream {
-    return _bridge.smsStream.map((event) {
+    return _bridge.smsStream.asyncMap((event) async {
       try {
-        return ParserService.parseSMS(
+        return await ParserService.parseSMS(
           event['sender'] ?? '',
           event['body'] ?? '',
           event['timestamp'] ?? DateTime.now().millisecondsSinceEpoch,

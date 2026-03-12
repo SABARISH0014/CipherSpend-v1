@@ -3,6 +3,7 @@ import '../services/parser_service.dart';
 import '../services/ai_service.dart';
 import '../models/transaction_model.dart';
 import '../utils/constants.dart';
+import 'interactive_training_screen.dart';
 
 class DebugParserScreen extends StatefulWidget {
   const DebugParserScreen({super.key});
@@ -15,6 +16,9 @@ class _DebugParserScreenState extends State<DebugParserScreen> {
   final TextEditingController _smsController = TextEditingController();
   String _resultLog = "Waiting for input...";
   bool _isAiLoaded = false;
+  bool _parsingFailed = false;
+  String _lastSmsBody = "";
+  String _lastSender = "VM-HDFC"; // Simulating a default sender
 
   @override
   void initState() {
@@ -30,22 +34,25 @@ class _DebugParserScreenState extends State<DebugParserScreen> {
     });
   }
 
-  void _runParser() {
+  Future<void> _runParser() async {
     String smsBody = _smsController.text.trim();
     if (smsBody.isEmpty) return;
 
     // Simulate a standard sender and current time
-    String sender = "VM-HDFC";
+    String sender = _lastSender;
     int timestamp = DateTime.now().millisecondsSinceEpoch;
 
     final TransactionModel? txn =
-        ParserService.parseSMS(sender, smsBody, timestamp);
+        await ParserService.parseSMS(sender, smsBody, timestamp);
 
     setState(() {
+      _lastSmsBody = smsBody;
       if (txn == null) {
+        _parsingFailed = true;
         _resultLog = "❌ PARSING FAILED or IGNORED\n"
             "Reason: AI categorized as 'Spam'/'Ignore' or no amount found.";
       } else {
+        _parsingFailed = false;
         _resultLog = "✅ PARSING SUCCESSFUL:\n\n"
             "💰 Amount:   ₹${txn.amount}\n"
             "🏪 Merchant: ${txn.merchant}\n"
@@ -131,6 +138,42 @@ class _DebugParserScreenState extends State<DebugParserScreen> {
                     color: Constants.colorPrimary, fontFamily: 'monospace'),
               ),
             ),
+
+            if (_parsingFailed)
+              Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                    ),
+                    onPressed: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => InteractiveTrainingScreen(
+                            smsBody: _lastSmsBody,
+                            sender: _lastSender,
+                          ),
+                        ),
+                      );
+
+                      if (result == true) {
+                        // Re-run the parser after a successful rule is added
+                        _runParser();
+                      }
+                    },
+                    icon: const Icon(Icons.model_training, color: Colors.white),
+                    label: const Text(
+                      "Train Manually",
+                      style: TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ),
 
             const SizedBox(height: 30),
             const Divider(color: Colors.white24),

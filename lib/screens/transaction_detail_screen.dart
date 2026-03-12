@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/transaction_model.dart';
 import '../services/training_service.dart';
 import '../utils/constants.dart';
+import 'interactive_training_screen.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
   final TransactionModel transaction;
@@ -188,6 +189,38 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       icon: const Icon(Icons.memory),
                       onPressed: _saveTraining,
                       label: const Text("EXECUTE OVERRIDE",
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'monospace',
+                              letterSpacing: 2)),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // 5. REGEX TRAINING BUTTON
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                          foregroundColor: Constants.colorPrimary,
+                          side: const BorderSide(color: Constants.colorPrimary),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8))),
+                      icon: const Icon(Icons.model_training),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => InteractiveTrainingScreen(
+                              smsBody: widget.transaction.body,
+                              sender: widget.transaction.sender,
+                            ),
+                          ),
+                        );
+                      },
+                      label: const Text("TRAIN REGEX PARSER",
                           style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontFamily: 'monospace',

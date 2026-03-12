@@ -38,7 +38,7 @@ class DBService {
     return await openDatabase(
       path,
       password: password,
-      version: 2,
+      version: 3,
       onOpen: (db) async {
         // [THE FIX] Bulletproof fallback: Ensures the blacklist table exists every time the app opens
         await db.execute(
@@ -78,6 +78,14 @@ class DBService {
         // [NEW] Create Blacklist table for fresh installs
         await db.execute('CREATE TABLE ignored_hashes(hash TEXT PRIMARY KEY)');
 
+        await db.execute('''
+          CREATE TABLE custom_rules(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender TEXT,
+            regex_pattern TEXT
+          )
+        ''');
+
         await db.transaction((txn) async {
           List<String> defaults = [
             'Food',
@@ -101,11 +109,38 @@ class DBService {
               'CREATE TABLE IF NOT EXISTS ignored_hashes(hash TEXT PRIMARY KEY)');
           print("🔄 Database upgraded to v2: Added Blacklist Table");
         }
+        if (oldVersion < 3) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS custom_rules(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              sender TEXT,
+              regex_pattern TEXT
+            )
+          ''');
+          print("🔄 Database upgraded to v3: Added Custom Rules Table");
+        }
       },
     );
   }
 
   // --- Week 3 Helper Methods ---
+
+  /// Custom Rule Management
+  Future<void> saveCustomRule(String sender, String pattern) async {
+    final db = await database;
+    await db.insert('custom_rules', {'sender': sender, 'regex_pattern': pattern});
+  }
+
+  Future<List<String>> getCustomRules(String sender) async {
+    final db = await database;
+    final List<Map<String, dynamic>> rules = await db.query(
+      'custom_rules',
+      columns: ['regex_pattern'],
+      where: 'sender = ?',
+      whereArgs: [sender],
+    );
+    return rules.map((r) => r['regex_pattern'] as String).toList();
+  }
 
   /// Get total spend by category for a specific month (For Forecast/Charts)
   Future<List<Map<String, dynamic>>> getCategorySpending(
