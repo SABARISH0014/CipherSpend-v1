@@ -10,16 +10,12 @@ import '../models/transaction_model.dart';
 import '../utils/constants.dart';
 import 'transaction_detail_screen.dart';
 import 'settings_screen.dart';
-<<<<<<< Updated upstream
-import 'visual_report_screen.dart';
-=======
 import '../services/notification_service.dart';
 import 'manual_entry_screen.dart';
 import 'visual_report_screen.dart';
 import 'search_export_screen.dart';
 import 'app_notifications_screen.dart';
 import 'package:flutter_animate/flutter_animate.dart';
->>>>>>> Stashed changes
 import 'package:permission_handler/permission_handler.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -62,13 +58,12 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   DateTime _selectedMonth = DateTime.now();
   bool _isLoading = true;
+  int _appNotificationCount = 0; // [NEW] Central Insights Hub Counter
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(
-      this,
-    ); // [NEW] Start listening to lifecycle
+    WidgetsBinding.instance.addObserver(this);
     _loadData();
     _listenToLiveSMS();
   }
@@ -87,6 +82,83 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (state == AppLifecycleState.resumed) {
       _loadData(); // Sync any background messages
       _checkSmartPrompt(); // Ask Android if they just used a payment app
+    }
+  }
+
+  // [NEW] The Insight Engine
+  Future<void> _generateSmartInsights() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Check if we already sent a daily insight today
+    String todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    String lastInsightDate = prefs.getString('last_insight_date') ?? "";
+
+    double spent = _forecast['spent'] ?? 0;
+    double budget = _forecast['budget'] ?? 1;
+    double projected = _forecast['projected'] ?? 0;
+    String topCategory = _forecast['top_category'] ?? "None";
+    double topAmount = _forecast['top_category_amount'] ?? 0;
+
+    double progress = spent / budget;
+
+    // 1. CRITICAL ALERT: Budget Exceeded (Will bypass the daily limit)
+    if (progress >= 1.0) {
+      bool exceededAlertSent =
+          prefs.getBool('exceeded_alert_sent_$todayStr') ?? false;
+      if (!exceededAlertSent) {
+        await LocalNotificationService().showInsightNotification(
+          id: 1,
+          title: "🚨 Budget Breached!",
+          body:
+              "You've spent ₹${spent.toStringAsFixed(0)}, exceeding your ₹${budget.toStringAsFixed(0)} limit. Time to activate stealth mode!",
+        );
+        await DBService().saveAppNotification("🚨 Budget Breached!", "You've spent ₹${spent.toStringAsFixed(0)}, exceeding your ₹${budget.toStringAsFixed(0)} limit. Time to activate stealth mode!", DateTime.now().millisecondsSinceEpoch);
+        await prefs.setBool('exceeded_alert_sent_$todayStr', true);
+        return;
+      }
+    }
+
+    // If we already sent a normal insight today, stop here.
+    if (lastInsightDate == todayStr) return;
+
+    // 2. WARNING ALERT: 80% Threshold
+    if (progress >= 0.8 && progress < 1.0) {
+      await LocalNotificationService().showInsightNotification(
+        id: 2,
+        title: "⚠️ Approaching Red Zone",
+        body:
+            "You've used ${(progress * 100).toStringAsFixed(0)}% of your budget. Slow down on the spending!",
+      );
+      await DBService().saveAppNotification("⚠️ Approaching Red Zone", "You've used ${(progress * 100).toStringAsFixed(0)}% of your budget. Slow down on the spending!", DateTime.now().millisecondsSinceEpoch);
+      await prefs.setString('last_insight_date', todayStr);
+      return;
+    }
+
+    // 3. PREDICTION ALERT: High Run Rate
+    if (projected > budget && progress < 0.8) {
+      await LocalNotificationService().showInsightNotification(
+        id: 3,
+        title: "🔮 AI Forecast Warning",
+        body:
+            "At your current daily rate, you will exceed your budget by ₹${(projected - budget).toStringAsFixed(0)} this month.",
+      );
+      await DBService().saveAppNotification("🔮 AI Forecast Warning", "At your current daily rate, you will exceed your budget by ₹${(projected - budget).toStringAsFixed(0)} this month.", DateTime.now().millisecondsSinceEpoch);
+      await prefs.setString('last_insight_date', todayStr);
+      return;
+    }
+
+    // 4. BEHAVIORAL ALERT: Top Category Insight
+    if (topCategory != "None" && (topAmount / spent) > 0.4) {
+      // If one category is more than 40% of total spend
+      await LocalNotificationService().showInsightNotification(
+        id: 4,
+        title: "📊 Top Spend: $topCategory",
+        body:
+            "You've dropped ₹${topAmount.toStringAsFixed(0)} on $topCategory. Is it a necessity or a luxury?",
+      );
+      await DBService().saveAppNotification("📊 Top Spend: $topCategory", "You've dropped ₹${topAmount.toStringAsFixed(0)} on $topCategory. Is it a necessity or a luxury?", DateTime.now().millisecondsSinceEpoch);
+      await prefs.setString('last_insight_date', todayStr);
+      return;
     }
   }
 
@@ -241,6 +313,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       _isLoading = true;
     });
 
+    // Make sure Notification Service is fully initialized before generating insights
+    await LocalNotificationService().init();
+
     // 1. DELTA SYNC: Catch up on missed messages (SMS + Notifications from Cache)
     await _smsService.silentBackgroundSync();
 
@@ -249,13 +324,20 @@ class _DashboardScreenState extends State<DashboardScreen>
     final forecastData = await _predictionService.getForecastForMonth(
       _selectedMonth,
     );
+    final appNotifCount = await DBService().getAppNotificationsCount();
 
     if (mounted) {
-      setState(() {
-        _transactions = list;
-        _forecast = forecastData;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _transactions = list;
+          _forecast = forecastData;
+          _appNotificationCount = appNotifCount;
+          _isLoading = false;
+        });
+
+        // [NEW] Fire the insight engine after data is ready
+        _generateSmartInsights();
+      }
     }
   }
 
@@ -500,58 +582,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                   Colors.transparent,
                 ],
               ),
-<<<<<<< Updated upstream
-            ],
-          ),
-          const SizedBox(height: 16),
-          Divider(color: Colors.white.withOpacity(0.1)),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.trending_up,
-                      color: Colors.redAccent,
-                      size: 14,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      "Most Spent: $topCategory",
-                      style: const TextStyle(
-                        color: Colors.redAccent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              InkWell(
-                onTap: _showPredictionDialog,
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Constants.colorPrimary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Constants.colorPrimary.withOpacity(0.3),
-=======
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -574,7 +604,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                           ),
                         ),
                       ],
->>>>>>> Stashed changes
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -938,11 +967,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         backgroundColor: Constants.colorSurface,
         actions: [
           IconButton(
-<<<<<<< Updated upstream
-            icon: const Icon(Icons.notifications_active, color: Colors.amber),
-            tooltip: "Enable Notification Listener",
-            onPressed: _openNotificationSettings,
-=======
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             icon: Builder(
@@ -978,7 +1002,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                 MaterialPageRoute(builder: (_) => const SearchExportScreen()),
               );
             },
->>>>>>> Stashed changes
           ),
           IconButton(
             padding: EdgeInsets.zero,
@@ -1014,8 +1037,6 @@ class _DashboardScreenState extends State<DashboardScreen>
           const SizedBox(width: 8), 
         ],
       ),
-<<<<<<< Updated upstream
-=======
 
       floatingActionButton: GestureDetector(
         onTap: () async {
@@ -1045,7 +1066,6 @@ class _DashboardScreenState extends State<DashboardScreen>
           child: const Icon(Icons.add, color: Colors.black, size: 30),
         ).animate().scale(curve: Curves.easeOutBack),
       ),
->>>>>>> Stashed changes
       body: Column(
         children: [
           _buildMonthSelector(monthName),
