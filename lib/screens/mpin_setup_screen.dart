@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../utils/constants.dart';
-import 'profile_setup_screen.dart'; // Make sure this file exists
+import 'package:flutter_animate/flutter_animate.dart';
+import 'profile_setup_screen.dart';
 
 class MPINSetupScreen extends StatefulWidget {
   const MPINSetupScreen({super.key});
@@ -58,9 +59,9 @@ class _MPINSetupScreenState extends State<MPINSetupScreen> {
             const Icon(Icons.lock_outline,
                 size: 60, color: Constants.colorPrimary),
             const SizedBox(height: 20),
-            const Text("Set 4-Digit Vault PIN", style: Constants.headerStyle),
+            Text("Set 4-Digit Vault PIN", style: Constants.headerStyle),
             const SizedBox(height: 10),
-            const Text(
+            Text(
               "This PIN encrypts your local database key.",
               textAlign: TextAlign.center,
               style: Constants.subHeaderStyle,
@@ -99,17 +100,27 @@ class _MPINSetupScreenState extends State<MPINSetupScreen> {
             // SAVE BUTTON
             SizedBox(
               width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Constants.colorPrimary,
-                  foregroundColor: Colors.black,
+              height: 56,
+              child: TapScaleWrapper(
+                onTap: _saveMPIN,
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: Constants.glowingBorderDecoration.copyWith(
+                    color: Constants.colorPrimary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    "Encrypt & Save",
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-                onPressed: _saveMPIN,
-                child: const Text("Encrypt & Save"),
               ),
             )
-          ],
+          ].animate(interval: 50.ms).fade(duration: 300.ms).slideY(begin: 0.1, curve: Curves.easeOutCubic),
         ),
       ),
     );

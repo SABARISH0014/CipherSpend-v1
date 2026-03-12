@@ -23,6 +23,12 @@ dependencies:
   shared_preferences: ^2.2.0
   crypto: ^3.0.3
   path: ^1.8.3
+<<<<<<< Updated upstream
+=======
+  flutter_local_notifications: ^21.0.0
+  flutter_animate: ^4.5.2
+  google_fonts: ^8.0.2
+>>>>>>> Stashed changes
 
 dev_dependencies:
   flutter_test:

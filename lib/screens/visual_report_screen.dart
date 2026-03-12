@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/transaction_model.dart';
 import '../utils/constants.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class VisualReportScreen extends StatefulWidget {
   final List<TransactionModel> transactions;
@@ -41,9 +42,9 @@ class _VisualReportScreenState extends State<VisualReportScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("SANKEY FLOW CHART", style: Constants.headerStyle),
+            Text("SANKEY FLOW CHART", style: Constants.headerStyle),
             const SizedBox(height: 5),
-            const Text("Budget → Categories", style: Constants.subHeaderStyle),
+            Text("Budget → Categories", style: Constants.subHeaderStyle),
             const SizedBox(height: 30),
 
             // THE CHART CANVAS
@@ -62,7 +63,15 @@ class _VisualReportScreenState extends State<VisualReportScreen> {
 
             // LEGEND
             ...sortedEntries
-                .map((e) => _buildLegendItem(e.key, e.value, totalSpent)),
+                .asMap()
+                .map((index, e) => MapEntry(
+                      index,
+                      _buildLegendItem(e.key, e.value, totalSpent)
+                          .animate()
+                          .fade(delay: (100 * index).ms)
+                          .slideX(begin: 0.1, curve: Curves.easeOutCubic),
+                    ))
+                .values,
           ],
         ),
       ),

@@ -10,7 +10,16 @@ import '../models/transaction_model.dart';
 import '../utils/constants.dart';
 import 'transaction_detail_screen.dart';
 import 'settings_screen.dart';
+<<<<<<< Updated upstream
 import 'visual_report_screen.dart';
+=======
+import '../services/notification_service.dart';
+import 'manual_entry_screen.dart';
+import 'visual_report_screen.dart';
+import 'search_export_screen.dart';
+import 'app_notifications_screen.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+>>>>>>> Stashed changes
 import 'package:permission_handler/permission_handler.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -418,6 +427,32 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  Color _getCategoryColor(String cat) {
+    String lowerCat = cat.toLowerCase();
+    if (lowerCat.contains('food')) return Colors.greenAccent;
+    if (lowerCat.contains('travel')) return Colors.lightBlueAccent;
+    if (lowerCat.contains('shopping')) return Colors.amberAccent;
+    if (lowerCat.contains('bills')) return Colors.redAccent;
+    if (lowerCat.contains('refund')) return Colors.tealAccent;
+    if (lowerCat.contains('cash')) return Colors.orangeAccent;
+    if (lowerCat.contains('investment')) return Colors.purpleAccent;
+    if (lowerCat.contains('transaction')) return Colors.indigoAccent;
+    return Colors.grey;
+  }
+
+  IconData _getCategoryIcon(String cat) {
+    String lowerCat = cat.toLowerCase();
+    if (lowerCat.contains('food')) return Icons.fastfood_rounded;
+    if (lowerCat.contains('travel')) return Icons.directions_car_rounded;
+    if (lowerCat.contains('shopping')) return Icons.shopping_bag_rounded;
+    if (lowerCat.contains('bills')) return Icons.receipt_rounded;
+    if (lowerCat.contains('refund')) return Icons.currency_exchange_rounded;
+    if (lowerCat.contains('cash')) return Icons.account_balance_wallet_rounded;
+    if (lowerCat.contains('investment')) return Icons.trending_up_rounded;
+    if (lowerCat.contains('transaction')) return Icons.swap_horiz_rounded;
+    return Icons.payment_rounded;
+  }
+
   Widget _buildPredictionCard() {
     double spent = _forecast['spent'] ?? 0;
     double budget = _forecast['budget'] ?? 1;
@@ -425,105 +460,47 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     bool isOverBudget = spent > budget;
     double progress = (budget > 0) ? (spent / budget).clamp(0.0, 1.0) : 0.0;
-    Color statusColor = isOverBudget
-        ? Colors.redAccent
-        : Constants.colorPrimary;
+    Color statusColor = isOverBudget ? Colors.redAccent : Constants.colorPrimary;
 
     return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Constants.colorSurface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      child: Stack(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "TOTAL SPENT",
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 10,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "₹${spent.toStringAsFixed(0)}",
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
+          // Ambient Neon Glow behind the card
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: statusColor.withOpacity(0.15),
+                    blurRadius: 24,
+                    spreadRadius: -2,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text(
-                    "MONTHLY BUDGET",
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 10,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "₹${budget.toStringAsFixed(0)}",
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
-              backgroundColor: Colors.black26,
-              color: statusColor,
             ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                isOverBudget
-                    ? "⚠️ Budget Exceeded"
-                    : "${(progress * 100).toStringAsFixed(0)}% Used",
-                style: TextStyle(
-                  color: statusColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
+          // Glassmorphic Card Surface
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              color: Constants.colorSurface.withOpacity(0.8),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.08),
+                width: 1.5,
               ),
-              Text(
-                "Remaining: ₹${(budget - spent).toStringAsFixed(0)}",
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withOpacity(0.05),
+                  Colors.transparent,
+                ],
               ),
+<<<<<<< Updated upstream
             ],
           ),
           const SizedBox(height: 16),
@@ -574,29 +551,193 @@ class _DashboardScreenState extends State<DashboardScreen>
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: Constants.colorPrimary.withOpacity(0.3),
+=======
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // --- TOP HEADER ---
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.blur_on, color: statusColor, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          "FORECAST",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
+>>>>>>> Stashed changes
                     ),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Icons.insights,
-                        color: Constants.colorPrimary,
-                        size: 14,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: statusColor.withOpacity(0.3)),
                       ),
-                      SizedBox(width: 6),
-                      Text(
-                        "View Projection",
+                      child: Text(
+                        isOverBudget ? "CRITICAL" : "ON TRACK",
                         style: TextStyle(
-                          color: Constants.colorPrimary,
-                          fontSize: 12,
+                          color: statusColor,
+                          fontSize: 9,
                           fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
                         ),
                       ),
-                    ],
-                  ),
+                    ).animate(onPlay: (c) => c.repeat(reverse: true)).fade(begin: 0.6, end: 1.0),
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 20),
+                
+                // --- MONEY ROW ---
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text("₹", style: TextStyle(color: statusColor, fontSize: 24, fontWeight: FontWeight.w400)),
+                    const SizedBox(width: 4),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween<double>(begin: 0, end: spent),
+                      duration: const Duration(milliseconds: 1500),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, child) {
+                        return Text(
+                          value.toStringAsFixed(0),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 42,
+                            fontWeight: FontWeight.w800,
+                            height: 1.0,
+                            letterSpacing: -1,
+                          ),
+                        );
+                      },
+                    ),
+                    const Spacer(),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text("BUDGET", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 1)),
+                        const SizedBox(height: 2),
+                        Text("₹${budget.toStringAsFixed(0)}", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                
+                // --- PROGRESS BAR ---
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [
+                        // Track
+                        Container(
+                          height: 8,
+                          width: constraints.maxWidth,
+                          decoration: BoxDecoration(
+                            color: Colors.black45,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Colors.white.withOpacity(0.05)),
+                          ),
+                        ),
+                        // Fill
+                        TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 0, end: progress),
+                          duration: const Duration(milliseconds: 1500),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) {
+                            return Container(
+                              height: 8,
+                              width: constraints.maxWidth * value,
+                              decoration: BoxDecoration(
+                                color: statusColor,
+                                borderRadius: BorderRadius.circular(4),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: statusColor.withOpacity(0.8),
+                                    blurRadius: 10,
+                                    spreadRadius: 1,
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    );
+                  }
+                ),
+                const SizedBox(height: 12),
+                
+                // --- SUBTEXT UNDER BAR ---
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "${(progress * 100).toStringAsFixed(1)}% Utilized",
+                      style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      "₹${(budget - spent).abs().toStringAsFixed(0)} ${isOverBudget ? 'Over' : 'Left'}",
+                      style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                
+                // --- BOTTOM ACTION ROW ---
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.05)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.pie_chart_outline, color: Constants.colorPrimary.withOpacity(0.8), size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                "Top Leak: $topCategory",
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    InkWell(
+                      onTap: _showPredictionDialog,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Constants.colorPrimary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Constants.colorPrimary.withOpacity(0.3)),
+                        ),
+                        child: const Icon(Icons.arrow_forward_ios_rounded, color: Constants.colorPrimary, size: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -653,7 +794,10 @@ class _DashboardScreenState extends State<DashboardScreen>
           : ListView.builder(
               itemCount: _transactions.length,
               itemBuilder: (context, index) =>
-                  _buildTransactionItem(_transactions[index]),
+                  _buildTransactionItem(_transactions[index])
+                      .animate(delay: (index * 50).ms)
+                      .fade(duration: 300.ms)
+                      .slideY(begin: 0.1, curve: Curves.easeOutCubic),
             ),
     );
   }
@@ -689,11 +833,12 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  // --- PERFECTED GLASS DECORATION TRANSACTION ITEM ---
   Widget _buildTransactionItem(TransactionModel txn) {
     final date = DateTime.fromMillisecondsSinceEpoch(txn.timestamp);
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Dismissible(
         key: Key(txn.hash),
         direction: DismissDirection.endToStart,
@@ -702,7 +847,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           padding: const EdgeInsets.only(right: 20),
           decoration: BoxDecoration(
             color: Colors.redAccent.withOpacity(0.8),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(16), 
           ),
           child: const Icon(Icons.delete_sweep, color: Colors.white, size: 30),
         ),
@@ -722,77 +867,58 @@ class _DashboardScreenState extends State<DashboardScreen>
           );
           _loadData();
         },
-        child: Card(
-          color: Constants.colorSurface,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          child: ListTile(
-            onTap: () async {
-              bool? updated = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => TransactionDetailScreen(transaction: txn),
+        child: Container(
+          // Using your glassDecoration, but wrapped precisely 
+          decoration: Constants.glassDecoration.copyWith(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          // CRITICAL FIX: This stops the Material tap ripple from bleeding out of the rounded corners
+          clipBehavior: Clip.antiAlias, 
+          child: Material(
+            color: Colors.transparent,
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Better breathing room
+              onTap: () async {
+                bool? updated = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => TransactionDetailScreen(transaction: txn),
+                  ),
+                );
+                if (updated == true) _loadData();
+              },
+              leading: CircleAvatar(
+                backgroundColor: _getCategoryColor(txn.category).withOpacity(0.2),
+                child: Icon(
+                  _getCategoryIcon(txn.category),
+                  color: _getCategoryColor(txn.category),
+                  size: 20,
                 ),
-              );
-              if (updated == true) _loadData();
-            },
-            leading: CircleAvatar(
-              backgroundColor: _getCategoryColor(txn.category).withOpacity(0.2),
-              child: Icon(
-                _getCategoryIcon(txn.category),
-                color: _getCategoryColor(txn.category),
-                size: 20,
               ),
-            ),
-            title: Text(
-              txn.category,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
+              title: Text(
+                txn.category,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            subtitle: Text(
-              "${txn.merchant} • ${DateFormat('dd MMM').format(date)}",
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-            trailing: Text(
-              "₹${txn.amount.toStringAsFixed(0)}",
-              style: const TextStyle(
-                color: Constants.colorPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+              subtitle: Text(
+                "${txn.merchant} • ${DateFormat('dd MMM').format(date)}",
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+              trailing: Text(
+                "₹${txn.amount.toStringAsFixed(0)}",
+                style: const TextStyle(
+                  color: Constants.colorPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
         ),
       ),
     );
-  }
-
-  Color _getCategoryColor(String cat) {
-    String lowerCat = cat.toLowerCase();
-    if (lowerCat.contains('food')) return Colors.green;
-    if (lowerCat.contains('travel')) return Colors.blue;
-    if (lowerCat.contains('shopping')) return Colors.amber;
-    if (lowerCat.contains('bills')) return Colors.red;
-    if (lowerCat.contains('refund')) return Colors.tealAccent;
-    if (lowerCat.contains('cash')) return Colors.orange;
-    if (lowerCat.contains('investment')) return Colors.purpleAccent;
-    if (lowerCat.contains('transaction')) return Colors.indigo;
-    return Colors.grey;
-  }
-
-  IconData _getCategoryIcon(String cat) {
-    String lowerCat = cat.toLowerCase();
-    if (lowerCat.contains('food')) return Icons.fastfood;
-    if (lowerCat.contains('travel')) return Icons.directions_car;
-    if (lowerCat.contains('shopping')) return Icons.shopping_bag;
-    if (lowerCat.contains('bills')) return Icons.receipt;
-    if (lowerCat.contains('refund')) return Icons.currency_exchange;
-    if (lowerCat.contains('cash')) return Icons.money;
-    if (lowerCat.contains('investment')) return Icons.trending_up;
-    if (lowerCat.contains('transaction')) return Icons.swap_horiz;
-    return Icons.payment;
   }
 
   @override
@@ -802,16 +928,67 @@ class _DashboardScreenState extends State<DashboardScreen>
     return Scaffold(
       backgroundColor: Constants.colorBackground,
       appBar: AppBar(
-        title: const Text("CipherSpend"),
+        titleSpacing: 16,
+        title: const Text(
+          "CipherSpend", 
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20, letterSpacing: 0),
+          maxLines: 1,
+          overflow: TextOverflow.visible,
+        ),
         backgroundColor: Constants.colorSurface,
         actions: [
           IconButton(
+<<<<<<< Updated upstream
             icon: const Icon(Icons.notifications_active, color: Colors.amber),
             tooltip: "Enable Notification Listener",
             onPressed: _openNotificationSettings,
+=======
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            icon: Builder(
+              builder: (context) {
+                Widget badge = Badge(
+                  isLabelVisible: _appNotificationCount > 0,
+                  label: Text(_appNotificationCount.toString()),
+                  child: const Icon(Icons.notifications_active, color: Colors.amber),
+                );
+                return _appNotificationCount > 0 
+                  ? badge.animate(onPlay: (controller) => controller.repeat(reverse: true))
+                         .scale(begin: const Offset(1, 1), end: const Offset(1.1, 1.1), duration: 1.seconds)
+                  : badge;
+              }
+            ),
+            tooltip: "Insights Hub",
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AppNotificationsScreen()),
+              );
+              _loadData(); 
+            },
           ),
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
           IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            icon: const Icon(Icons.search, color: Colors.white),
+            tooltip: "Search & Export",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SearchExportScreen()),
+              );
+            },
+>>>>>>> Stashed changes
+          ),
+          IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+            icon: const Icon(Icons.refresh), 
+            onPressed: _loadData,
+          ),
+          IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             icon: const Icon(Icons.bar_chart, color: Constants.colorPrimary),
             onPressed: () {
               Navigator.push(
@@ -826,14 +1003,49 @@ class _DashboardScreenState extends State<DashboardScreen>
             },
           ),
           IconButton(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             icon: const Icon(Icons.settings),
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              MaterialPageRoute(builder: (_) => SettingsScreen()),
             ),
           ),
+          const SizedBox(width: 8), 
         ],
       ),
+<<<<<<< Updated upstream
+=======
+
+      floatingActionButton: GestureDetector(
+        onTap: () async {
+          bool? didAdd = await Navigator.push(
+            context,
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) => const ManualEntryScreen(),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return FadeTransition(opacity: animation, child: SlideTransition(
+                  position: Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(animation),
+                  child: child,
+                ));
+              },
+            ),
+          );
+          if (didAdd == true) {
+            _loadData();
+          }
+        },
+        child: Container(
+          height: 60, width: 60,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(colors: [Constants.colorPrimary, Color(0xFF00FF88)]),
+            boxShadow: [BoxShadow(color: Constants.colorPrimary.withOpacity(0.4), blurRadius: 15, spreadRadius: 2, offset: const Offset(0, 5))],
+          ),
+          child: const Icon(Icons.add, color: Colors.black, size: 30),
+        ).animate().scale(curve: Curves.easeOutBack),
+      ),
+>>>>>>> Stashed changes
       body: Column(
         children: [
           _buildMonthSelector(monthName),

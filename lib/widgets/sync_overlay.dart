@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/constants.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class SyncOverlay extends StatelessWidget {
   final int total;
@@ -25,10 +26,9 @@ class SyncOverlay extends StatelessWidget {
         child: Container(
           width: MediaQuery.of(context).size.width * 0.8,
           padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Constants.colorSurface,
+          decoration: Constants.glassDecoration.copyWith(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Constants.colorPrimary.withOpacity(0.5)),
+            border: Border.all(color: Constants.colorPrimary.withValues(alpha: 0.5)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -59,7 +59,7 @@ class SyncOverlay extends StatelessWidget {
               ),
             ],
           ),
-        ),
+        ).animate().scale(begin: const Offset(0.9, 0.9), curve: Curves.easeOutCubic).fade(duration: 300.ms),
       ),
     );
   }

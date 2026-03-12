@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart'; // Added for Android Permissions
+import 'package:flutter_animate/flutter_animate.dart';
 import '../utils/constants.dart';
 import '../services/auth_service.dart';
 import 'dashboard_screen.dart';
-import 'profile_setup_screen.dart';
+import 'mpin_setup_screen.dart';
 
 class VerificationScreen extends StatefulWidget {
   const VerificationScreen({super.key});
@@ -22,7 +23,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
   // State variables
   bool _isChecking = true;
   bool _isLoginMode = false;
-  bool _isMobileVerified = false;
 
   final TextEditingController _inputController = TextEditingController();
   String _statusMessage = "";
@@ -76,7 +76,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     // ==========================================
     // SETUP FLOW - STEP 1: REAL LOOPBACK SMS
     // ==========================================
-    if (!_isMobileVerified) {
+    if (!_isLoginMode) {
       if (input.length == 10) {
         // 1. Ask user for SMS Permissions explicitly
         var status = await Permission.sms.request();
@@ -99,10 +99,11 @@ class _VerificationScreenState extends State<VerificationScreen> {
           if (isVerified) {
             setState(() {
               _isChecking = false;
-              _isMobileVerified = true;
-              _statusMessage = "✅ Mobile Verified! Now set a 4-digit MPIN.";
-              _inputController.clear();
             });
+            if (mounted) {
+              Navigator.pushReplacement(context,
+                  MaterialPageRoute(builder: (_) => const MPINSetupScreen()));
+            }
           } else {
             setState(() {
               _isChecking = false;
@@ -120,27 +121,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
       }
       return;
     }
-
-    // ==========================================
-    // SETUP FLOW - STEP 2: MPIN SETTING
-    // ==========================================
-    if (_isMobileVerified) {
-      if (input.length == 4) {
-        // Save the MPIN to FlutterSecureStorage
-        await _authService.saveMpin(input);
-        setState(() => _statusMessage = "✅ MPIN Secured!");
-
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        if (mounted) {
-          // Route to Profile Setup to get Username and Salary Date
-          Navigator.pushReplacement(context,
-              MaterialPageRoute(builder: (_) => const ProfileSetupScreen()));
-        }
-      } else {
-        setState(() => _statusMessage = "MPIN must be exactly 4 digits");
-      }
-    }
   }
 
   void _navigateToDashboard() {
@@ -153,15 +133,15 @@ class _VerificationScreenState extends State<VerificationScreen> {
     // Dynamic UI Text based on current state
     String titleText = _isLoginMode
         ? "Welcome Back"
-        : (_isMobileVerified ? "Secure Vault" : "Setup Vault");
+        : "Setup Vault";
 
     String hintText = _isLoginMode
         ? "Enter MPIN"
-        : (_isMobileVerified ? "Enter 4-Digit MPIN" : "Enter 10-Digit Mobile");
+        : "Enter 10-Digit Mobile";
 
     String buttonText = _isLoginMode
         ? "UNLOCK VAULT"
-        : (_isMobileVerified ? "SAVE MPIN" : "VERIFY SMS");
+        : "VERIFY SMS";
 
     return Scaffold(
       backgroundColor: Constants.colorBackground,
@@ -173,20 +153,18 @@ class _VerificationScreenState extends State<VerificationScreen> {
             Icon(
                 _isLoginMode
                     ? Icons.lock_person
-                    : (_isMobileVerified
-                        ? Icons.security
-                        : Icons.phonelink_ring),
+                    : Icons.phonelink_ring,
                 size: 80,
-                color: Constants.colorPrimary),
+                color: Constants.colorPrimary)
+                .animate(onPlay: (controller) => controller.repeat(reverse: true))
+                .scale(begin: const Offset(1, 1), end: const Offset(1.1, 1.1), duration: 1500.ms),
             const SizedBox(height: 20),
             Text(titleText, style: Constants.headerStyle),
             const SizedBox(height: 10),
             Text(
               _isLoginMode
                   ? "Enter your MPIN or use Fingerprint"
-                  : (_isMobileVerified
-                      ? "Create a secure PIN to lock your data"
-                      : "We will send an SMS to verify this device"),
+                  : "We will send an SMS to verify this device",
               style: const TextStyle(color: Colors.grey),
               textAlign: TextAlign.center,
             ),
@@ -194,8 +172,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
             TextField(
               controller: _inputController,
               keyboardType: TextInputType.number,
-              obscureText: _isLoginMode || _isMobileVerified,
-              maxLength: (_isLoginMode || _isMobileVerified) ? 4 : 10,
+              obscureText: _isLoginMode,
+              maxLength: _isLoginMode ? 4 : 10,
               style: const TextStyle(
                   color: Colors.white, fontSize: 24, letterSpacing: 5),
               textAlign: TextAlign.center,
@@ -210,7 +188,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none),
               ),
-            ),
+            ).animate().fade(duration: 500.ms).slideY(begin: 0.1),
             const SizedBox(height: 20),
 
             // Loading indicator while waiting for the native SMS to loop back
@@ -236,16 +214,24 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 onPressed: _isChecking ? null : _handleSubmit,
                 child: Text(buttonText),
               ),
-            ),
+            ).animate().fade(duration: 500.ms).slideY(begin: 0.1),
             if (_isLoginMode)
               Padding(
                 padding: const EdgeInsets.only(top: 20),
-                child: IconButton(
-                  icon: const Icon(Icons.fingerprint,
-                      size: 40, color: Constants.colorPrimary),
-                  onPressed: _triggerBiometric,
+                child: TapScaleWrapper(
+                  onTap: _triggerBiometric,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Constants.colorPrimary.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.fingerprint,
+                        size: 40, color: Constants.colorPrimary),
+                  ).animate(onPlay: (controller) => controller.repeat(reverse: true))
+                   .shimmer(duration: 2.seconds, color: Colors.white),
                 ),
-              ),
+              ).animate().fade(delay: 200.ms),
           ],
         ),
       ),

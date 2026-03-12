@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'screens/verification_screen.dart';
+import 'screens/startup_screen.dart'; // [NEW] Import Startup Screen
 import 'services/ai_service.dart'; // [NEW] Import AI Service
 import 'utils/constants.dart';
 import 'dart:typed_data'; // Add this if missing
@@ -87,8 +88,8 @@ class MyApp extends StatelessWidget {
         ),
       ),
 
-      // Security Root: Start with Verification
-      home: const VerificationScreen(),
+      // Security Root: Start with StartupScreen
+      home: const StartupScreen(),
     );
   }
 }

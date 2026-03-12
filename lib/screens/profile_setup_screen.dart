@@ -3,6 +3,7 @@ import 'package:flutter/services.dart'; // Required for MethodChannel
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../services/sms_service.dart';
 import '../utils/constants.dart';
 import '../widgets/sync_overlay.dart';
@@ -194,26 +195,38 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                     style: TextStyle(color: Colors.grey),
                   ),
                 ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Constants.colorPrimary,
-                  ),
-                  onPressed: () async {
+                TapScaleWrapper(
+                  onTap: () async {
                     Navigator.pop(ctx);
                     // Open Android Settings Page
                     await platform.invokeMethod('openNotificationSettings');
                     // We wait for user to come back (handled by didChangeAppLifecycleState)
                   },
+<<<<<<< Updated upstream
                   child: const Text(
                     "ENABLE",
                     style: TextStyle(
                       color: Colors.black,
                       fontWeight: FontWeight.bold,
+=======
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Constants.colorPrimary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      "ALLOW",
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                      ),
+>>>>>>> Stashed changes
                     ),
                   ),
                 ),
               ],
-            ),
+            ).animate().fade(duration: 200.ms).scale(begin: const Offset(0.9, 0.9)),
           );
         }
       }
@@ -223,6 +236,162 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     }
   }
 
+<<<<<<< Updated upstream
+=======
+  // --- STEP 2: NOTIFICATION LISTENER ---
+  Future<void> _checkListenerAndProceed() async {
+    bool isEnabled = false;
+    try {
+      isEnabled = await platform.invokeMethod('isNotificationListenerEnabled');
+    } catch (e) {
+      print("Warning: Native check failed - $e");
+      isEnabled = false; 
+    }
+
+    if (isEnabled) {
+      _askSmartPromptAndProceed();
+    } else {
+      if (!mounted) return; 
+      
+      // [FIX] Removed early flag assignment here
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: Constants.colorSurface,
+          title: const Text(
+            "Step 2: Enable UPI Tracking",
+            style: TextStyle(color: Colors.white),
+          ),
+          content: const Text(
+            "To track GPay, PhonePe, and Paytm transactions automatically, CipherSpend needs 'Notification Access'.\n\n"
+            "1. Tap ENABLE below.\n"
+            "2. Find 'CipherSpend' in the list.\n"
+            "3. Toggle it ON and press Allow.",
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _askSmartPromptAndProceed();
+              },
+              child: const Text(
+                "SKIP",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            TapScaleWrapper(
+              onTap: () async {
+                setState(() {
+                  _waitingForListenerPermission = true;
+                });
+                Navigator.pop(ctx);
+                await platform.invokeMethod('openNotificationSettings');
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Constants.colorPrimary,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  "ENABLE",
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ).animate().fade(duration: 200.ms).scale(begin: const Offset(0.9, 0.9)),
+      );
+    }
+  }
+
+  // --- STEP 3: SMART PROMPTS (USAGE ACCESS) ---
+  Future<void> _askSmartPromptAndProceed() async {
+    bool hasAccess = false;
+    try {
+      hasAccess = await platform.invokeMethod('hasUsageAccess');
+    } catch (e) {
+      print("Warning: Native check failed - $e");
+      hasAccess = false; 
+    }
+
+    if (hasAccess) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('smart_prompt_enabled', true);
+      _askDedupePreference();
+    } else {
+      if (!mounted) return;
+      
+      // [FIX] Removed early flag assignment here
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: Constants.colorSurface,
+          title: const Text(
+            "Step 3: Smart Prompts",
+            style: TextStyle(color: Colors.white),
+          ),
+          content: const Text(
+            "If a payment app doesn't send a notification, CipherSpend can detect when you close the app and proactively ask if you made a payment.\n\n"
+            "To enable this, we need 'Usage Access'.\n"
+            "1. Tap ENABLE below.\n"
+            "2. Find 'CipherSpend' and turn ON 'Permit usage access'.",
+            style: TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('smart_prompt_enabled', false);
+                _askDedupePreference();
+              },
+              child: const Text(
+                "SKIP",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            TapScaleWrapper(
+              onTap: () async {
+                setState(() {
+                  _waitingForUsagePermission = true;
+                });
+                Navigator.pop(ctx);
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('smart_prompt_enabled', true);
+                await platform.invokeMethod('openUsageAccessSettings');
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Constants.colorPrimary,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  "ENABLE",
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ).animate().fade(duration: 200.ms).scale(begin: const Offset(0.9, 0.9)),
+      );
+    }
+  }
+
+  // --- STEP 4: DUPLICATE PREFERENCE ---
+>>>>>>> Stashed changes
   Future<void> _askDedupePreference() async {
     if (!mounted) return;
 
@@ -257,24 +426,30 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
             },
             child: const Text("ASK ME", style: TextStyle(color: Colors.grey)),
           ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Constants.colorPrimary,
-              foregroundColor: Colors.black,
-            ),
-            onPressed: () async {
+          TapScaleWrapper(
+            onTap: () async {
               Navigator.pop(ctx);
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('dedupe_rule', 'auto_drop');
               _runInitialSync(); // Start sync after saving
             },
-            child: const Text(
-              "AUTO-DROP",
-              style: TextStyle(fontWeight: FontWeight.bold),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Constants.colorPrimary,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                "AUTO-DROP",
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
         ],
-      ),
+      ).animate().fade(duration: 200.ms).scale(begin: const Offset(0.9, 0.9)),
     );
   }
 
@@ -330,13 +505,13 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                     ),
                     const SizedBox(height: 24),
 
-                    const Text(
+                    Text(
                       "Initialize Vault",
                       style: Constants.headerStyle,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 10),
-                    const Text(
+                    Text(
                       "This data stays local and encrypted on your device.",
                       style: Constants.subHeaderStyle,
                       textAlign: TextAlign.center,
@@ -344,29 +519,22 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                     const SizedBox(height: 40),
 
                     // Biometric Card
-                    GestureDetector(
-                      onTap: _isBiometricRegistered ? null : _registerBiometric,
+                    TapScaleWrapper(
+                      onTap: () {
+                        if (!_isBiometricRegistered) _registerBiometric();
+                      },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
                         padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: _isBiometricRegistered
-                              ? Colors.green.withOpacity(0.1)
-                              : Constants.colorSurface,
-                          border: Border.all(
-                            color: _isBiometricRegistered
-                                ? Colors.green
-                                : Colors.grey.withOpacity(0.3),
-                            width: 1.5,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        decoration: _isBiometricRegistered
+                            ? Constants.glowingBorderDecoration
+                            : Constants.glassDecoration,
                         child: Row(
                           children: [
                             Icon(
                               Icons.fingerprint,
                               color: _isBiometricRegistered
-                                  ? Colors.green
+                                  ? Constants.colorPrimary
                                   : Colors.white,
                               size: 32,
                             ),
@@ -492,26 +660,26 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                     SizedBox(
                       width: double.infinity,
                       height: 56,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Constants.colorPrimary,
-                          foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(
+                      child: TapScaleWrapper(
+                        onTap: _completeSetup,
+                        child: Container(
+                          alignment: Alignment.center,
+                          decoration: Constants.glowingBorderDecoration.copyWith(
+                            color: Constants.colorPrimary,
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          elevation: 2,
-                        ),
-                        onPressed: _completeSetup,
-                        child: const Text(
-                          "Finalize & Sync",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                          child: const Text(
+                            "Finalize & Sync",
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.black,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ],
+                  ].animate(interval: 50.ms).fade(duration: 300.ms).slideY(begin: 0.1, curve: Curves.easeOutCubic),
                 ),
               ),
             ),

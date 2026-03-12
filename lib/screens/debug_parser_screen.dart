@@ -3,6 +3,11 @@ import '../services/parser_service.dart';
 import '../services/ai_service.dart';
 import '../models/transaction_model.dart';
 import '../utils/constants.dart';
+<<<<<<< Updated upstream
+=======
+import 'interactive_training_screen.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+>>>>>>> Stashed changes
 
 class DebugParserScreen extends StatefulWidget {
   const DebugParserScreen({super.key});
@@ -105,13 +110,18 @@ class _DebugParserScreenState extends State<DebugParserScreen> {
             SizedBox(
               width: double.infinity,
               height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: Constants.colorPrimary),
-                onPressed: _runParser,
-                child: const Text("RUN PARSER",
-                    style: TextStyle(
-                        color: Colors.black, fontWeight: FontWeight.bold)),
+              child: TapScaleWrapper(
+                onTap: _runParser,
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: Constants.glowingBorderDecoration.copyWith(
+                    color: Constants.colorPrimary,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text("RUN PARSER",
+                      style: TextStyle(
+                          color: Colors.black, fontWeight: FontWeight.bold)),
+                ),
               ),
             ),
 
@@ -121,17 +131,74 @@ class _DebugParserScreenState extends State<DebugParserScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                  color: Colors.black,
-                  border: Border.all(color: Colors.white24),
-                  borderRadius: BorderRadius.circular(8)),
+              decoration: _parsingFailed
+                  ? Constants.dangerGlowDecoration.copyWith(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.withOpacity(0.5)),
+                      color: Colors.black,
+                    )
+                  : Constants.glowingBorderDecoration.copyWith(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green.withOpacity(0.3)),
+                      color: Colors.black,
+                    ),
               child: Text(
                 _resultLog,
-                style: const TextStyle(
-                    color: Constants.colorPrimary, fontFamily: 'monospace'),
+                style: TextStyle(
+                    color: _parsingFailed ? Colors.redAccent : Constants.colorPrimary,
+                    fontFamily: 'monospace',
+                ),
               ),
-            ),
+            ).animate(target: _resultLog == "Waiting for input..." ? 0 : 1).fade(duration: 300.ms),
 
+<<<<<<< Updated upstream
+=======
+            if (_parsingFailed)
+              Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: TapScaleWrapper(
+                    onTap: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => InteractiveTrainingScreen(
+                            smsBody: _lastSmsBody,
+                            sender: _lastSender,
+                          ),
+                        ),
+                      );
+
+                      if (result == true) {
+                        _runParser();
+                      }
+                    },
+                    child: Container(
+                      alignment: Alignment.center,
+                      decoration: Constants.glassDecoration.copyWith(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blueAccent),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.model_training, color: Colors.blueAccent),
+                          SizedBox(width: 8),
+                          Text(
+                            "Train Manually",
+                            style: TextStyle(
+                                color: Colors.blueAccent, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+>>>>>>> Stashed changes
             const SizedBox(height: 30),
             const Divider(color: Colors.white24),
             const Text("Quick Samples (Tap to Test):",
@@ -151,10 +218,16 @@ class _DebugParserScreenState extends State<DebugParserScreen> {
   Widget _buildSampleTile(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
-      child: ActionChip(
-        backgroundColor: Constants.colorSurface,
-        label: Text(text, style: const TextStyle(color: Colors.white70)),
-        onPressed: () => _pasteSample(text),
+      child: TapScaleWrapper(
+        onTap: () => _pasteSample(text),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: Constants.glassDecoration.copyWith(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white12),
+          ),
+          child: Text(text, style: const TextStyle(color: Colors.white70)),
+        ),
       ),
     );
   }
