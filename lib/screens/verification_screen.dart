@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:permission_handler/permission_handler.dart'; // Added for Android Permissions
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../utils/constants.dart';
 import '../services/auth_service.dart';
-import 'dashboard_screen.dart';
-import 'profile_setup_screen.dart';
+import 'startup_screen.dart'; 
+import 'mpin_setup_screen.dart';
 
 class VerificationScreen extends StatefulWidget {
   const VerificationScreen({super.key});
@@ -16,13 +17,10 @@ class VerificationScreen extends StatefulWidget {
 
 class _VerificationScreenState extends State<VerificationScreen> {
   final AuthService _authService = AuthService();
-  // Native bridge to talk to MainActivity.kt
   static const platform = MethodChannel('com.example.cipherspend/sms');
 
-  // State variables
   bool _isChecking = true;
   bool _isLoginMode = false;
-  bool _isMobileVerified = false;
 
   final TextEditingController _inputController = TextEditingController();
   String _statusMessage = "";
@@ -35,9 +33,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   Future<void> _determineMode() async {
     final prefs = await SharedPreferences.getInstance();
-    // Check if Profile is completely set up
     bool isComplete = prefs.getBool(Constants.prefIsSetupComplete) ?? false;
-    // Check if MPIN is saved in Secure Storage
     bool hasMpin = await _authService.isUserRegistered();
 
     setState(() {
@@ -52,201 +48,253 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   Future<void> _triggerBiometric() async {
     bool success = await _authService.authenticateBiometric();
-    if (success) _navigateToDashboard();
+    if (success) _navigateToSuccess();
   }
 
   Future<void> _handleSubmit() async {
     String input = _inputController.text.trim();
     if (input.isEmpty) return;
 
-    // ==========================================
-    // LOGIN FLOW (Unlock Vault)
-    // ==========================================
     if (_isLoginMode) {
       bool isValid = await _authService.validateMpin(input);
       if (isValid) {
-        _navigateToDashboard();
+        _navigateToSuccess();
       } else {
-        setState(() => _statusMessage = "❌ Incorrect MPIN");
+        setState(() => _statusMessage = "❌ ACCESS DENIED: Invalid MPIN");
         _inputController.clear();
       }
       return;
     }
 
-    // ==========================================
-    // SETUP FLOW - STEP 1: REAL LOOPBACK SMS
-    // ==========================================
-    if (!_isMobileVerified) {
-      if (input.length == 10) {
-        // 1. Ask user for SMS Permissions explicitly
-        var status = await Permission.sms.request();
-        if (!status.isGranted) {
-          setState(() => _statusMessage =
-              "❌ SMS Permission is strictly required to verify the device.");
-          return;
-        }
+    // New User Device Verification Logic
+    if (input.length == 10) {
+      var status = await Permission.sms.request();
+      if (!status.isGranted) {
+        setState(() => _statusMessage = "❌ SMS Permission required to secure node.");
+        return;
+      }
 
-        // 2. Start Native SMS Process
-        setState(() {
-          _statusMessage = "⏳ Sending real SMS to $input...";
-          _isChecking = true; // Show loading indicator
-        });
+      setState(() {
+        _statusMessage = "⏳ Verifying Device Signature...";
+        _isChecking = true;
+      });
 
-        try {
-          final bool isVerified = await platform
-              .invokeMethod('verifyLoopbackSms', {'phone': input});
+      try {
+        final bool isVerified = await platform.invokeMethod('verifyLoopbackSms', {'phone': input});
 
-          if (isVerified) {
-            setState(() {
-              _isChecking = false;
-              _isMobileVerified = true;
-              _statusMessage = "✅ Mobile Verified! Now set a 4-digit MPIN.";
-              _inputController.clear();
-            });
-          } else {
-            setState(() {
-              _isChecking = false;
-              _statusMessage = "❌ SMS Verification Failed or Timed Out.";
-            });
-          }
-        } on PlatformException catch (e) {
+        if (isVerified) {
           setState(() {
             _isChecking = false;
-            _statusMessage = "❌ Native Error: ${e.message}";
+            _statusMessage = "✅ Node Verified. Initializing Vault...";
+            _inputController.clear();
+          });
+          
+          // Seamless transition to MPIN setup
+          await Future.delayed(const Duration(milliseconds: 800));
+          if (mounted) {
+            Navigator.pushReplacement(
+              context, 
+              MaterialPageRoute(builder: (_) => const MPINSetupScreen())
+            );
+          }
+        } else {
+          setState(() {
+            _isChecking = false;
+            _statusMessage = "❌ Handshake Failed.";
           });
         }
-      } else {
-        setState(() => _statusMessage = "Enter a valid 10-digit Mobile Number");
+      } on PlatformException catch (e) {
+        setState(() {
+          _isChecking = false;
+          _statusMessage = "❌ Protocol Error: ${e.message}";
+        });
       }
-      return;
-    }
-
-    // ==========================================
-    // SETUP FLOW - STEP 2: MPIN SETTING
-    // ==========================================
-    if (_isMobileVerified) {
-      if (input.length == 4) {
-        // Save the MPIN to FlutterSecureStorage
-        await _authService.saveMpin(input);
-        setState(() => _statusMessage = "✅ MPIN Secured!");
-
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        if (mounted) {
-          // Route to Profile Setup to get Username and Salary Date
-          Navigator.pushReplacement(context,
-              MaterialPageRoute(builder: (_) => const ProfileSetupScreen()));
-        }
-      } else {
-        setState(() => _statusMessage = "MPIN must be exactly 4 digits");
-      }
+    } else {
+      setState(() => _statusMessage = "Enter valid 10-digit vector");
     }
   }
 
-  void _navigateToDashboard() {
+  void _navigateToSuccess() {
     Navigator.pushReplacement(
-        context, MaterialPageRoute(builder: (_) => const DashboardScreen()));
+        context, 
+        MaterialPageRoute(builder: (_) => const StartupScreen(isSuccessMode: true))
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Dynamic UI Text based on current state
-    String titleText = _isLoginMode
-        ? "Welcome Back"
-        : (_isMobileVerified ? "Secure Vault" : "Setup Vault");
-
-    String hintText = _isLoginMode
-        ? "Enter MPIN"
-        : (_isMobileVerified ? "Enter 4-Digit MPIN" : "Enter 10-Digit Mobile");
-
-    String buttonText = _isLoginMode
-        ? "UNLOCK VAULT"
-        : (_isMobileVerified ? "SAVE MPIN" : "VERIFY SMS");
+    String titleText = _isLoginMode ? "SYSTEM LOCKED" : "INITIALIZE VAULT";
+    String hintText = _isLoginMode ? "Enter Security PIN" : "Enter Mobile Number";
+    String buttonText = _isLoginMode ? "DECRYPT VAULT" : "VERIFY DEVICE";
 
     return Scaffold(
       backgroundColor: Constants.colorBackground,
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 30),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-                _isLoginMode
-                    ? Icons.lock_person
-                    : (_isMobileVerified
-                        ? Icons.security
-                        : Icons.phonelink_ring),
-                size: 80,
-                color: Constants.colorPrimary),
-            const SizedBox(height: 20),
-            Text(titleText, style: Constants.headerStyle),
-            const SizedBox(height: 10),
-            Text(
-              _isLoginMode
-                  ? "Enter your MPIN or use Fingerprint"
-                  : (_isMobileVerified
-                      ? "Create a secure PIN to lock your data"
-                      : "We will send an SMS to verify this device"),
-              style: const TextStyle(color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 40),
-            TextField(
-              controller: _inputController,
-              keyboardType: TextInputType.number,
-              obscureText: _isLoginMode || _isMobileVerified,
-              maxLength: (_isLoginMode || _isMobileVerified) ? 4 : 10,
-              style: const TextStyle(
-                  color: Colors.white, fontSize: 24, letterSpacing: 5),
-              textAlign: TextAlign.center,
-              decoration: InputDecoration(
-                counterText: "",
-                filled: true,
-                fillColor: Constants.colorSurface,
-                hintText: hintText,
-                hintStyle: const TextStyle(
-                    color: Colors.grey, fontSize: 16, letterSpacing: 1),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Loading indicator while waiting for the native SMS to loop back
-            _isChecking && !_isLoginMode
-                ? const CircularProgressIndicator(color: Constants.colorPrimary)
-                : Text(
-                    _statusMessage,
-                    style: TextStyle(
-                        color: _statusMessage.contains("❌")
-                            ? Colors.red
-                            : Colors.green,
-                        fontWeight: FontWeight.bold),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                
+                // GLOWING SECURITY NODE
+                Container(
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    color: Constants.colorSurface.withOpacity(0.8),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Constants.colorPrimary.withOpacity(0.5), width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Constants.colorPrimary.withOpacity(0.15),
+                        blurRadius: 40,
+                        spreadRadius: 8,
+                      ),
+                      BoxShadow(
+                        color: Constants.colorPrimary.withOpacity(0.3),
+                        blurRadius: 10,
+                        spreadRadius: 2,
+                      )
+                    ],
                   ),
+                  child: Icon(
+                    _isLoginMode ? Icons.lock_outline_rounded : Icons.cell_tower_rounded,
+                    size: 56,
+                    color: Constants.colorPrimary,
+                  ),
+                ).animate().scale(duration: 600.ms, curve: Curves.easeOutBack),
+                
+                const SizedBox(height: 40),
+                
+                // MICRO-HEADER TEXT
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.terminal_rounded, size: 14, color: Constants.colorPrimary),
+                    const SizedBox(width: 8),
+                    Text(
+                      titleText, 
+                      style: Constants.headerStyle.copyWith(fontSize: 18, letterSpacing: 4)
+                    ),
+                  ],
+                ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2),
+                    
+                const SizedBox(height: 12),
+                
+                Text(
+                  _isLoginMode
+                      ? "Awaiting decryption key or biometric signature."
+                      : "Establishing secure loopback to verify device integrity.",
+                  style: Constants.subHeaderStyle.copyWith(color: Colors.white54, fontSize: 13, height: 1.4),
+                  textAlign: TextAlign.center,
+                ).animate().fadeIn(delay: 300.ms),
+                
+                const SizedBox(height: 48),
+                
+                // GLASSMORPHISM INPUT FIELD
+                TextField(
+                  controller: _inputController,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.none,
+                  obscureText: _isLoginMode,
+                  maxLength: _isLoginMode ? 4 : 10,
+                  style: TextStyle(
+                    color: Constants.colorPrimary, 
+                    fontSize: 28, 
+                    letterSpacing: _isLoginMode ? 16 : 4, 
+                    fontWeight: FontWeight.w900
+                  ),
+                  textAlign: TextAlign.center,
+                  decoration: InputDecoration(
+                    counterText: "",
+                    filled: true,
+                    fillColor: Colors.black26,
+                    hintText: hintText,
+                    hintStyle: const TextStyle(
+                      color: Colors.white24, fontSize: 16, letterSpacing: 1, fontWeight: FontWeight.normal
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.white.withOpacity(0.08), width: 1)
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Constants.colorPrimary.withOpacity(0.5), width: 1.5)
+                    ),
+                  ),
+                ).animate().fadeIn(delay: 400.ms).slideX(begin: 0.1),
+                
+                const SizedBox(height: 24),
 
-            const SizedBox(height: 30),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: Constants.colorPrimary,
-                    foregroundColor: Colors.black),
-                onPressed: _isChecking ? null : _handleSubmit,
-                child: Text(buttonText),
-              ),
+                // STATUS MESSAGE
+                _isChecking && !_isLoginMode
+                    ? const CircularProgressIndicator(color: Constants.colorPrimary)
+                    : Text(
+                        _statusMessage,
+                        style: TextStyle(
+                            color: _statusMessage.contains("❌")
+                                ? Constants.colorError
+                                : Constants.colorPrimary,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1,
+                            fontSize: 13,
+                        ),
+                        textAlign: TextAlign.center,
+                      ).animate(target: _statusMessage.isNotEmpty ? 1 : 0).shake(),
+
+                const SizedBox(height: 32),
+                
+                // ACTION BUTTON
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Constants.colorPrimary,
+                      foregroundColor: Colors.black,
+                      elevation: 8,
+                      shadowColor: Constants.colorPrimary.withOpacity(0.4),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    onPressed: _isChecking ? null : _handleSubmit,
+                    icon: Icon(_isLoginMode ? Icons.key_rounded : Icons.send_to_mobile_rounded, size: 20),
+                    label: Text(
+                      buttonText, 
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2)
+                    ),
+                  ),
+                ).animate().fadeIn(delay: 500.ms).scaleY(begin: 0.8, alignment: Alignment.bottomCenter),
+                
+                // BIOMETRIC SCANNER (Login Mode Only)
+                if (_isLoginMode)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 40),
+                    child: Column(
+                      children: [
+                        Text("OR SCAN BIOMETRIC", style: Constants.fontRegular.copyWith(fontSize: 10, color: Colors.white30, letterSpacing: 2)),
+                        const SizedBox(height: 16),
+                        InkWell(
+                          onTap: _triggerBiometric,
+                          borderRadius: BorderRadius.circular(40),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Constants.colorPrimary.withOpacity(0.05),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Constants.colorPrimary.withOpacity(0.3), width: 1),
+                            ),
+                            child: const Icon(Icons.fingerprint_rounded, size: 40, color: Constants.colorPrimary),
+                          ),
+                        ).animate(onPlay: (controller) => controller.repeat(reverse: true))
+                         .fade(begin: 0.6, end: 1.0, duration: 1.5.seconds)
+                         .scale(begin: const Offset(0.95, 0.95), end: const Offset(1.05, 1.05), duration: 1.5.seconds),
+                      ],
+                    ),
+                  ).animate().fadeIn(delay: 700.ms),
+              ],
             ),
-            if (_isLoginMode)
-              Padding(
-                padding: const EdgeInsets.only(top: 20),
-                child: IconButton(
-                  icon: const Icon(Icons.fingerprint,
-                      size: 40, color: Constants.colorPrimary),
-                  onPressed: _triggerBiometric,
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );

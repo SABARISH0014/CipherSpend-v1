@@ -1,4 +1,6 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class Constants {
   // --- Secure Storage Keys (Critical Security) ---
@@ -16,19 +18,45 @@ class Constants {
   static const String tableTransactions = "transactions";
   static const String tableUserConfig = "user_config";
 
-  // --- UI Colors & Themes (Cyberpunk Aesthetic) ---
-  static const Color colorPrimary = Color(0xFF00E676); // Cyber Green
-  static const Color colorBackground = Color(0xFF121212); // Deep Dark
-  static const Color colorSurface = Color(0xFF1E1E1E); // Card Background
-  static const Color colorError = Color(0xFFCF6679);
+  // --- Premium UI Colors (Cyberpunk / Glassmorphism) ---
+  static const Color colorPrimary = Color(0xFF00E676); // Neon Green
+  static const Color colorAccent = Color(0xFFBB86FC); // AI/Neural Purple
+  static const Color colorBackground = Color(0xFF0A0A0A); // Deep True Dark
+  static const Color colorSurface = Color(0x0DFFFFFF); // 5% White for Glass
+  static const Color colorError = Color(0xFFFF5252); // Danger Neon Red
 
-  // --- Text Styles ---
-  static const TextStyle headerStyle = TextStyle(
-      fontSize: 24,
-      fontWeight: FontWeight.bold,
-      color: Colors.white,
-      letterSpacing: 1.2);
+  // --- Universal Typography (Space Grotesk) ---
+  static TextStyle get fontRegular => GoogleFonts.spaceGrotesk(
+        color: Colors.white70,
+      );
 
-  static const TextStyle subHeaderStyle =
-      TextStyle(fontSize: 16, color: Colors.grey);
+  static TextStyle get headerStyle => GoogleFonts.spaceGrotesk(
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+        letterSpacing: 1.2,
+      );
+
+  static TextStyle get subHeaderStyle => GoogleFonts.spaceGrotesk(
+        fontSize: 16,
+        color: Colors.grey.shade400,
+        letterSpacing: 0.5,
+      );
+
+  // --- Universal Glassmorphism Standard ---
+  static BoxDecoration get glassDecoration => BoxDecoration(
+        color: colorSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white10, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      );
+
+  // Use this inside a BackdropFilter for true glass effect
+  static ImageFilter get glassBlur => ImageFilter.blur(sigmaX: 12, sigmaY: 12);
 }

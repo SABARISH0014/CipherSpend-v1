@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart'; 
 import '../models/transaction_model.dart';
 import '../utils/constants.dart';
 
@@ -45,97 +46,244 @@ class _VisualReportScreenState extends State<VisualReportScreen>
       totalSpent += txn.amount;
     }
 
-    // Sort categories by spend (highest first)
     var sortedEntries = categoryTotals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
     return Scaffold(
       backgroundColor: Constants.colorBackground,
       appBar: AppBar(
-        title: const Text("Money Flow Analysis"),
-        backgroundColor: Constants.colorSurface,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0, // Prevents scroll color-shift
+        surfaceTintColor: Colors.transparent,
+        centerTitle: false,
+        title: Padding(
+          padding: const EdgeInsets.only(left: 8.0),
+          child: Text(
+            "FLOW ANALYSIS", 
+            style: Constants.headerStyle.copyWith(fontSize: 16, letterSpacing: 2)
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
+        physics: const BouncingScrollPhysics(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("SANKEY FLOW CHART", style: Constants.headerStyle),
-            const SizedBox(height: 5),
-            const Text("Budget → Categories", style: Constants.subHeaderStyle),
-            const SizedBox(height: 30),
-
-            // THE CHART CANVAS
-            Center(
-              child: AnimatedBuilder(
-                animation: _controller,
-                builder: (context, child) {
-                  return CustomPaint(
-                    size: Size(MediaQuery.of(context).size.width, 400),
-                    painter: SankeyPainter(
-                      budget: widget.budget,
-                      totalSpent: totalSpent,
-                      categories: sortedEntries,
-                      animationValue: _controller.value,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+              child: Row(
+                children: [
+                  const Icon(Icons.account_tree_rounded, size: 14, color: Constants.colorAccent),
+                  const SizedBox(width: 8),
+                  Text(
+                    "SANKEY NETWORK",
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 10,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.bold,
                     ),
-                  );
-                },
-              ),
+                  ),
+                ],
+              ).animate().fadeIn().slideX(begin: -0.1),
             ),
+            const SizedBox(height: 16),
 
-            const SizedBox(height: 30),
+            // THE CHART CANVAS WRAPPED IN GLASSMORPHISM
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              decoration: Constants.glassDecoration.copyWith(
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withOpacity(0.05)),
+              ),
+              child: Center(
+                child: AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, child) {
+                    return CustomPaint(
+                      size: Size(MediaQuery.of(context).size.width * 0.8, 350),
+                      painter: SankeyPainter(
+                        budget: widget.budget,
+                        totalSpent: totalSpent,
+                        categories: sortedEntries,
+                        animationValue: _controller.value,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ).animate().scale(delay: 200.ms, curve: Curves.easeOutBack, duration: 600.ms).fadeIn(),
 
-            // LEGEND
-            ...sortedEntries
-                .map((e) => _buildLegendItem(e.key, e.value, totalSpent)),
+            const SizedBox(height: 32),
+
+            // LEGEND HEADER
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Row(
+                children: [
+                  const Icon(Icons.data_usage_rounded, size: 14, color: Constants.colorPrimary),
+                  const SizedBox(width: 8),
+                  Text(
+                    "SPEND BREAKDOWN",
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 10,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ).animate().fadeIn(delay: 400.ms),
+            ),
+            const SizedBox(height: 16),
+            
+            // DYNAMIC LEDGER ITEMS
+            ...sortedEntries.asMap().entries.map((mapEntry) {
+              int index = mapEntry.key;
+              var entry = mapEntry.value;
+              return _buildLegendItem(entry.key, entry.value, totalSpent)
+                  .animate()
+                  .fade(duration: 400.ms, delay: (400 + (50 * index)).ms)
+                  .slideY(begin: 0.1, curve: Curves.easeOutCubic);
+            }),
+            const SizedBox(height: 40),
           ],
         ),
       ),
     );
   }
 
+  // --- UPGRADED CYBER-NODE LEGEND ITEM ---
   Widget _buildLegendItem(String cat, double amount, double total) {
-    double percent = (amount / total * 100);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          CircleAvatar(radius: 6, backgroundColor: _getColor(cat)),
-          const SizedBox(width: 10),
-          Expanded(
-              child: Text(cat, style: const TextStyle(color: Colors.white))),
-          Text("₹${amount.toStringAsFixed(0)}",
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold)),
-          const SizedBox(width: 10),
-          Text("${percent.toStringAsFixed(1)}%",
-              style: const TextStyle(color: Colors.grey, fontSize: 12)),
+    double percent = total > 0 ? (amount / total * 100) : 0.0;
+    final catColor = _getColor(cat);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: catColor.withOpacity(0.03),
+            blurRadius: 12,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
+          ),
         ],
+      ),
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: Constants.colorSurface.withOpacity(0.6),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              catColor.withOpacity(0.1),
+              Colors.transparent,
+            ],
+          ),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            children: [
+              // Glowing Neon Strip
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: catColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: catColor.withOpacity(0.8),
+                      blurRadius: 8,
+                      spreadRadius: 1,
+                    )
+                  ]
+                ),
+              ),
+              const SizedBox(width: 16),
+              
+              // Category Icon
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: catColor.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: catColor.withOpacity(0.2), width: 1),
+                ),
+                child: Icon(Icons.circle, color: catColor, size: 12),
+              ),
+              const SizedBox(width: 16),
+              
+              // Category Name
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Text(
+                    cat.toUpperCase(),
+                    style: TextStyle(color: Colors.white.withOpacity(0.9), fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1),
+                  ),
+                ),
+              ),
+              
+              // Percent Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white.withOpacity(0.05)),
+                ),
+                child: Text(
+                  "${percent.toStringAsFixed(1)}%",
+                  style: Constants.fontRegular.copyWith(fontSize: 11, color: Colors.white70),
+                ),
+              ),
+              const SizedBox(width: 12),
+              
+              // Amount
+              Padding(
+                padding: const EdgeInsets.only(right: 20),
+                child: Text(
+                  "₹${amount.toStringAsFixed(0)}",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  // --- UPDATED COLOR MAPPING ---
   Color _getColor(String cat) {
     String lowerCat = cat.toLowerCase();
-    if (lowerCat.contains('food')) return Colors.green;
-    if (lowerCat.contains('travel')) return Colors.blue;
-    if (lowerCat.contains('shopping')) return Colors.amber;
-    if (lowerCat.contains('bills')) return Colors.red;
+    if (lowerCat.contains('food')) return Colors.greenAccent;
+    if (lowerCat.contains('travel')) return Colors.lightBlueAccent;
+    if (lowerCat.contains('shopping')) return Colors.amberAccent;
+    if (lowerCat.contains('bills')) return Colors.redAccent;
     if (lowerCat.contains('refund')) return Colors.tealAccent;
-    if (lowerCat.contains('cash')) return Colors.orange;
-    if (lowerCat.contains('investment')) return Colors.purpleAccent;
-    if (lowerCat.contains('transaction')) return Colors.indigo;
-
-    // Kept for backward compatibility with old DB records
-    if (lowerCat.contains('entertainment')) return Colors.purple;
-    if (lowerCat.contains('grocery')) return Colors.teal;
-
+    if (lowerCat.contains('cash')) return Colors.orangeAccent;
+    if (lowerCat.contains('investment')) return Constants.colorAccent;
+    if (lowerCat.contains('transaction')) return Colors.indigoAccent;
     return Colors.grey;
   }
 }
 
-// --- THE PAINTER LOGIC ---
+// --- UPGRADED GLOWING PAINTER ---
 class SankeyPainter extends CustomPainter {
   final double budget;
   final double totalSpent;
@@ -151,119 +299,87 @@ class SankeyPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..style = PaintingStyle.fill;
-
-    // Config
-    double leftX = 20;
-    double rightX = size.width - 20;
-    double barWidth = 20;
-
-    // 1. Draw LEFT Bar (Total Budget or Spent)
-    // We base height on Total Spent to fill the view nicely
-    double totalHeight = size.height * 0.8;
+    double leftX = 10;
+    double rightX = size.width - 10;
+    double barWidth = 16;
+    double totalHeight = size.height * 0.9;
     double startY = (size.height - totalHeight) / 2;
 
+    // Budget Source Node (Glowing)
     paint.color = Constants.colorPrimary;
+    paint.maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.solid, 4); // Added soft glow
     Rect leftRect = Rect.fromLTWH(leftX, startY, barWidth, totalHeight);
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(leftRect, const Radius.circular(4)), paint);
+    canvas.drawRRect(RRect.fromRectAndRadius(leftRect, const Radius.circular(8)), paint);
+    paint.maskFilter = null; // Reset for other paths
 
-    // 2. Draw RIGHT Bars (Categories) & Curves
     double currentY = startY;
 
     for (var entry in categories) {
-      // Calculate relative height for this category
-      double proportion = entry.value / totalSpent;
+      double proportion = entry.value / (totalSpent > 0 ? totalSpent : 1);
       double catHeight = totalHeight * proportion;
+      if (catHeight < 4) catHeight = 4;
 
-      // Safety gap
-      if (catHeight < 2) catHeight = 2;
-
-      // Draw Right Bar
       Color categoryColor = _getColor(entry.key);
-      paint.color = categoryColor;
       
+      // Category Target Node
+      paint.color = categoryColor;
       Rect rightRect = Rect.fromLTWH(rightX, currentY, barWidth, catHeight);
-      canvas.drawRRect(
-          RRect.fromRectAndRadius(rightRect, const Radius.circular(4)), paint);
+      canvas.drawRRect(RRect.fromRectAndRadius(rightRect, const Radius.circular(8)), paint);
 
-      // Draw Connection Curve (The Sankey Stream)
+      // Flow Path
       Path path = Path();
-      path.moveTo(leftX + barWidth,
-          startY + (totalHeight / 2)); // Start from center of left
+      path.moveTo(leftX + barWidth, startY + (totalHeight / 2));
       path.cubicTo(
-          leftX + size.width * 0.5,
-          startY + (totalHeight / 2), // Control point 1
-          rightX - size.width * 0.5,
-          currentY + (catHeight / 2), // Control point 2
-          rightX,
-          currentY + (catHeight / 2) // End at center of right node
-          );
+          leftX + size.width * 0.5, startY + (totalHeight / 2),
+          rightX - size.width * 0.5, currentY + (catHeight / 2),
+          rightX, currentY + (catHeight / 2));
 
-      // Background stream
+      // Dim Background Flow
       Paint flowPaint = Paint()
-        ..color = categoryColor.withOpacity(0.2) // Lighter background
+        ..color = categoryColor.withOpacity(0.1) 
         ..style = PaintingStyle.stroke
-        ..strokeWidth = catHeight * 0.8 // Thickness based on amount
+        ..strokeWidth = catHeight * 0.7 
         ..strokeCap = StrokeCap.round;
-
       canvas.drawPath(path, flowPaint);
 
-      // --- ANIMATED PARTICLES STREAM ---
-      // We extract metrics to draw glowing "data segments" moving along the path.
+      // Animated Glowing Particles
       if (path.computeMetrics().isNotEmpty) {
         ui.PathMetrics pathMetrics = path.computeMetrics();
         ui.PathMetric metric = pathMetrics.first;
-        
         double pathLength = metric.length;
-        
-        // Define animation parameters
-        int numParticles = 3; // Number of particles flowing on this path
-        double dashLength = pathLength * 0.15; // Length of each glowing dash
+        int numParticles = 3; 
+        double dashLength = pathLength * 0.15; 
         
         Paint particlePaint = Paint()
-          ..color = categoryColor.withOpacity(0.8) // Brighter for flowing data
+          ..color = categoryColor.withOpacity(0.9) 
           ..style = PaintingStyle.stroke
-          ..strokeWidth = catHeight * 0.6 // Slightly thinner than bg stream
-          ..strokeCap = StrokeCap.round;
+          ..strokeWidth = catHeight * 0.3 
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.solid, 6); // Laser glow effect
           
         for (int i = 0; i < numParticles; i++) {
-            // Offset logic for staggered looping particles
             double phaseOffset = i / numParticles; 
             double currentProgress = (animationValue + phaseOffset) % 1.0;
-            
             double startDistance = (pathLength + dashLength) * currentProgress - dashLength;
             double endDistance = startDistance + dashLength;
-            
-            // Extract the moving path segment
-            ui.Path extractPath = metric.extractPath(
-                startDistance.clamp(0.0, pathLength), 
-                endDistance.clamp(0.0, pathLength)
-            );
-            
+            ui.Path extractPath = metric.extractPath(startDistance.clamp(0.0, pathLength), endDistance.clamp(0.0, pathLength));
             canvas.drawPath(extractPath, particlePaint);
         }
       }
-
-      currentY += catHeight + 5; // Add small gap
+      currentY += catHeight + 8; 
     }
   }
 
-  // --- UPDATED COLOR MAPPING FOR PAINTER ---
   Color _getColor(String cat) {
     String lowerCat = cat.toLowerCase();
-    if (lowerCat.contains('food')) return Colors.green;
-    if (lowerCat.contains('travel')) return Colors.blue;
-    if (lowerCat.contains('shopping')) return Colors.amber;
-    if (lowerCat.contains('bills')) return Colors.red;
+    if (lowerCat.contains('food')) return Colors.greenAccent;
+    if (lowerCat.contains('travel')) return Colors.lightBlueAccent;
+    if (lowerCat.contains('shopping')) return Colors.amberAccent;
+    if (lowerCat.contains('bills')) return Colors.redAccent;
     if (lowerCat.contains('refund')) return Colors.tealAccent;
-    if (lowerCat.contains('cash')) return Colors.orange;
-    if (lowerCat.contains('investment')) return Colors.purpleAccent;
-    if (lowerCat.contains('transaction')) return Colors.indigo;
-
-    // Kept for backward compatibility with old DB records
-    if (lowerCat.contains('entertainment')) return Colors.purple;
-    if (lowerCat.contains('grocery')) return Colors.teal;
-
+    if (lowerCat.contains('cash')) return Colors.orangeAccent;
+    if (lowerCat.contains('investment')) return Constants.colorAccent;
+    if (lowerCat.contains('transaction')) return Colors.indigoAccent;
     return Colors.grey;
   }
 

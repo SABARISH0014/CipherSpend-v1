@@ -15,8 +15,11 @@ class AuthService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   // --- Hashing Helper ---
+  // --- Hashing Helper ---
   String _hashMpin(String pin) {
-    var bytes = utf8.encode(pin);
+    // Inject a unique salt to prevent rainbow table / brute-force attacks
+    const String salt = "C1ph3r_V@ult_S4lt_8923!"; 
+    var bytes = utf8.encode(salt + pin);
     var digest = sha256.convert(bytes);
     return digest.toString();
   }
@@ -42,11 +45,14 @@ class AuthService {
     return storedHash == inputHash;
   }
 
-  // --- Biometric Auth ---
+// --- Biometric Auth ---
   Future<bool> authenticateBiometric() async {
     try {
+      bool isSupported = await _localAuth.isDeviceSupported();
       bool canCheck = await _localAuth.canCheckBiometrics;
-      if (!canCheck) return false;
+      
+      if (!isSupported || !canCheck) return false;
+
       return await _localAuth.authenticate(
         localizedReason: 'Scan to unlock Vault',
         options: const AuthenticationOptions(
@@ -58,7 +64,6 @@ class AuthService {
       return false;
     }
   }
-
   // --- [NEW] NUCLEAR WIPE (Kill Switch Helper) ---
   Future<void> nuclearWipe() async {
     // 1. Wipe Secure Storage (MPIN, Biometrics)

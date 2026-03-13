@@ -1,8 +1,11 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+
 import '../models/transaction_model.dart';
 import '../services/sms_service.dart';
 import '../utils/constants.dart';
@@ -29,17 +32,9 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
   String _selectedType = "All";
 
   final List<String> _categories = [
-    "All",
-    "Food",
-    "Travel",
-    "Shopping",
-    "Bills",
-    "Entertainment",
-    "Grocery",
-    "Cash",
-    "Investment",
-    "Transfer",
-    "Uncategorized"
+    "All", "Food", "Travel", "Shopping", "Bills", 
+    "Entertainment", "Grocery", "Cash", "Investment", 
+    "Transfer", "Uncategorized"
   ];
 
   final List<String> _types = ["All", "UPI", "Debit", "Credit", "NetBanking", "Unknown"];
@@ -85,125 +80,186 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
       context: context,
       builder: (context) {
         return StatefulBuilder(builder: (context, setDialogState) {
-          return AlertDialog(
-            backgroundColor: Constants.colorSurface,
-            title: const Text("Filter Transactions", style: TextStyle(color: Colors.white)),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Date Range Selector
-                  const Text("Date Range", style: TextStyle(color: Colors.grey)),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final picked = await showDateRangePicker(
-                        context: context,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                        builder: (context, child) {
-                          return Theme(
-                            data: Theme.of(context).copyWith(
-                              colorScheme: const ColorScheme.dark(
-                                primary: Constants.colorPrimary,
-                                onPrimary: Colors.black,
-                                surface: Constants.colorSurface,
-                                onSurface: Colors.white,
-                              ),
-                            ),
-                            child: child!,
+          return BackdropFilter(
+            filter: Constants.glassBlur,
+            child: Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: Constants.glassDecoration,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.filter_alt_rounded, color: Constants.colorAccent),
+                          const SizedBox(width: 10),
+                          Text("Filter Ledger", style: Constants.headerStyle.copyWith(fontSize: 20)),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      
+                      // Date Range Selector
+                      Text("Date Range", style: Constants.fontRegular),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                          side: const BorderSide(color: Colors.white24),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          final picked = await showDateRangePicker(
+                            context: context,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime.now(),
+                            builder: (context, child) {
+                              return Theme(
+                                data: Theme.of(context).copyWith(
+                                  colorScheme: const ColorScheme.dark(
+                                    primary: Constants.colorPrimary,
+                                    onPrimary: Colors.black,
+                                    surface: Constants.colorBackground,
+                                    onSurface: Colors.white,
+                                  ),
+                                ),
+                                child: child!,
+                              );
+                            },
                           );
+                          if (picked != null) {
+                            setDialogState(() {
+                              tempStart = picked.start;
+                              tempEnd = picked.end;
+                            });
+                          }
                         },
-                      );
-                      if (picked != null) {
-                        setDialogState(() {
-                          tempStart = picked.start;
-                          tempEnd = picked.end;
-                        });
-                      }
-                    },
-                    icon: const Icon(Icons.date_range, color: Constants.colorPrimary),
-                    label: Text(
-                      tempStart == null
-                          ? "Select Range"
-                          : "${DateFormat('MMM dd, yyyy').format(tempStart!)} - ${DateFormat('MMM dd, yyyy').format(tempEnd!)}",
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ),
-                  if (tempStart != null)
-                    TextButton(
-                      onPressed: () {
-                        setDialogState(() {
-                          tempStart = null;
-                          tempEnd = null;
-                        });
-                      },
-                      child: const Text("Clear Dates", style: TextStyle(color: Colors.redAccent)),
-                    ),
-                  const SizedBox(height: 16),
-                  
-                  // Category Dropdown
-                  const Text("Category", style: TextStyle(color: Colors.grey)),
-                  DropdownButton<String>(
-                    isExpanded: true,
-                    value: tempCat,
-                    dropdownColor: Constants.colorSurface,
-                    items: _categories.map((c) {
-                      return DropdownMenuItem(
-                        value: c,
-                        child: Text(c, style: const TextStyle(color: Colors.white)),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setDialogState(() => tempCat = val);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
+                        icon: const Icon(Icons.date_range_rounded, color: Constants.colorPrimary),
+                        label: Text(
+                          tempStart == null
+                              ? "Select Range"
+                              : "${DateFormat('MMM dd, yyyy').format(tempStart!)} - ${DateFormat('MMM dd, yyyy').format(tempEnd!)}",
+                          style: Constants.fontRegular.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      if (tempStart != null)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () {
+                              setDialogState(() {
+                                tempStart = null;
+                                tempEnd = null;
+                              });
+                            },
+                            child: const Text("Clear Dates", style: TextStyle(color: Constants.colorError)),
+                          ),
+                        ),
+                      const SizedBox(height: 20),
+                      
+                      // Category Dropdown
+                      Text("Category", style: Constants.fontRegular),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isExpanded: true,
+                            value: tempCat,
+                            dropdownColor: Constants.colorSurface,
+                            icon: const Icon(Icons.arrow_drop_down_rounded, color: Constants.colorPrimary),
+                            items: _categories.map((c) {
+                              return DropdownMenuItem(
+                                value: c,
+                                child: Text(c, style: Constants.fontRegular.copyWith(color: Colors.white)),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setDialogState(() => tempCat = val);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
 
-                  // Type Dropdown
-                  const Text("Payment Type", style: TextStyle(color: Colors.grey)),
-                  DropdownButton<String>(
-                    isExpanded: true,
-                    value: tempType,
-                    dropdownColor: Constants.colorSurface,
-                    items: _types.map((t) {
-                      return DropdownMenuItem(
-                        value: t,
-                        child: Text(t, style: const TextStyle(color: Colors.white)),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setDialogState(() => tempType = val);
-                      }
-                    },
+                      // Type Dropdown
+                      Text("Payment Vector", style: Constants.fontRegular),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isExpanded: true,
+                            value: tempType,
+                            dropdownColor: Constants.colorSurface,
+                            icon: const Icon(Icons.arrow_drop_down_rounded, color: Constants.colorPrimary),
+                            items: _types.map((t) {
+                              return DropdownMenuItem(
+                                value: t,
+                                child: Text(t, style: Constants.fontRegular.copyWith(color: Colors.white)),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setDialogState(() => tempType = val);
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text("CANCEL", style: Constants.fontRegular),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              backgroundColor: Constants.colorPrimary,
+                              foregroundColor: Colors.black,
+                              elevation: 4,
+                              shadowColor: Constants.colorPrimary.withOpacity(0.3),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _startDate = tempStart;
+                                _endDate = tempEnd;
+                                _selectedCategory = tempCat;
+                                _selectedType = tempType;
+                              });
+                              Navigator.pop(context);
+                              _performSearch();
+                            },
+                            child: const Text("APPLY", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1)),
+                          )
+                        ],
+                      )
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("CANCEL", style: TextStyle(color: Colors.grey)),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Constants.colorPrimary),
-                onPressed: () {
-                  setState(() {
-                    _startDate = tempStart;
-                    _endDate = tempEnd;
-                    _selectedCategory = tempCat;
-                    _selectedType = tempType;
-                  });
-                  Navigator.pop(context);
-                  _performSearch();
-                },
-                child: const Text("APPLY", style: TextStyle(color: Colors.black)),
-              )
-            ],
+            ).animate().scale(curve: Curves.easeOutCubic, duration: 400.ms).fadeIn(),
           );
         });
       },
@@ -213,7 +269,11 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
   Future<void> _exportToCSV() async {
     if (_transactions.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No transactions to export.")),
+        SnackBar(
+          content: Text("No transactions to export.", style: Constants.fontRegular.copyWith(color: Colors.black, fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.orangeAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
@@ -272,9 +332,10 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Export saved to: $path"),
+            content: Text("Export saved to: $path", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
             backgroundColor: Constants.colorPrimary,
             duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -282,8 +343,9 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Export failed: $e"),
-            backgroundColor: Colors.red,
+            content: Text("Export failed: $e", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            backgroundColor: Constants.colorError,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -292,33 +354,204 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
 
   Color _getCategoryColor(String cat) {
     String lowerCat = cat.toLowerCase();
-    if (lowerCat.contains('food')) return Colors.green;
-    if (lowerCat.contains('travel')) return Colors.blue;
-    if (lowerCat.contains('shopping')) return Colors.amber;
-    if (lowerCat.contains('bills')) return Colors.red;
+    if (lowerCat.contains('food')) return Colors.greenAccent;
+    if (lowerCat.contains('travel')) return Colors.lightBlueAccent;
+    if (lowerCat.contains('shopping')) return Colors.amberAccent;
+    if (lowerCat.contains('bills')) return Colors.redAccent;
     if (lowerCat.contains('refund')) return Colors.tealAccent;
-    if (lowerCat.contains('cash')) return Colors.orange;
-    if (lowerCat.contains('investment')) return Colors.purpleAccent;
-    if (lowerCat.contains('transaction')) return Colors.indigo;
+    if (lowerCat.contains('cash')) return Colors.orangeAccent;
+    if (lowerCat.contains('investment')) return Constants.colorAccent;
+    if (lowerCat.contains('transaction')) return Colors.indigoAccent;
     return Colors.grey;
   }
 
   IconData _getCategoryIcon(String cat) {
     String lowerCat = cat.toLowerCase();
-    if (lowerCat.contains('food')) return Icons.fastfood;
-    if (lowerCat.contains('travel')) return Icons.directions_car;
-    if (lowerCat.contains('shopping')) return Icons.shopping_bag;
-    if (lowerCat.contains('bills')) return Icons.receipt;
-    if (lowerCat.contains('refund')) return Icons.currency_exchange;
-    if (lowerCat.contains('cash')) return Icons.money;
-    if (lowerCat.contains('investment')) return Icons.trending_up;
-    if (lowerCat.contains('transaction')) return Icons.swap_horiz;
-    return Icons.payment;
+    if (lowerCat.contains('food')) return Icons.fastfood_rounded;
+    if (lowerCat.contains('travel')) return Icons.directions_car_rounded;
+    if (lowerCat.contains('shopping')) return Icons.shopping_bag_rounded;
+    if (lowerCat.contains('bills')) return Icons.receipt_long_rounded;
+    if (lowerCat.contains('refund')) return Icons.currency_exchange_rounded;
+    if (lowerCat.contains('cash')) return Icons.account_balance_wallet_rounded;
+    if (lowerCat.contains('investment')) return Icons.trending_up_rounded;
+    if (lowerCat.contains('transaction')) return Icons.swap_horiz_rounded;
+    return Icons.payment_rounded;
+  }
+
+  // --- CYBER-NODE TRANSACTION CARDS (Ported from Dashboard) ---
+  Widget _buildTransactionItem(TransactionModel txn, int index) {
+    final date = DateTime.fromMillisecondsSinceEpoch(txn.timestamp);
+    final catColor = _getCategoryColor(txn.category);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: catColor.withOpacity(0.03),
+            blurRadius: 12,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: () async {
+          bool? updated = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => TransactionDetailScreen(transaction: txn)),
+          );
+          if (updated == true) _performSearch();
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: Constants.colorSurface.withOpacity(0.6), 
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withOpacity(0.08), width: 1), 
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                catColor.withOpacity(0.1),
+                Colors.transparent,
+              ],
+            ),
+          ),
+          child: IntrinsicHeight(
+            child: Row(
+              children: [
+                // Glowing Neon Strip
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: catColor,
+                    boxShadow: [
+                      BoxShadow(
+                        color: catColor.withOpacity(0.8),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      )
+                    ]
+                  ),
+                ),
+                const SizedBox(width: 16),
+                
+                // Category Icon
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: catColor.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: catColor.withOpacity(0.2), width: 1),
+                  ),
+                  child: Icon(_getCategoryIcon(txn.category), color: catColor, size: 18),
+                ),
+                const SizedBox(width: 16),
+                
+                // Details
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          txn.merchant, 
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white, 
+                            fontWeight: FontWeight.w700, 
+                            fontSize: 15, 
+                            letterSpacing: 0.5
+                          )
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: catColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                txn.category.toUpperCase(), 
+                                style: TextStyle(color: catColor.withOpacity(0.9), fontSize: 8, fontWeight: FontWeight.w800, letterSpacing: 1)
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(Icons.access_time_rounded, color: Colors.white.withOpacity(0.3), size: 10),
+                            const SizedBox(width: 4),
+                            Text(
+                              DateFormat('dd MMM, HH:mm').format(date), 
+                              style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10, fontFamily: 'Courier') 
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                // Amount
+                Padding(
+                  padding: const EdgeInsets.only(right: 20),
+                  child: Text(
+                    "₹${txn.amount.toStringAsFixed(0)}", 
+                    style: TextStyle(
+                      color: Colors.white, 
+                      fontSize: 18, 
+                      fontWeight: FontWeight.w800, 
+                      letterSpacing: -0.5,
+                      shadows: [
+                        Shadow(color: Colors.black.withOpacity(0.5), blurRadius: 4, offset: const Offset(0, 2))
+                      ]
+                    )
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ).animate().fade(duration: 400.ms, delay: (40 * index).ms).slideY(begin: 0.1, curve: Curves.easeOutCubic);
+  }
+
+  // --- SCANNING RADAR EMPTY STATE ---
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 100, height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Constants.colorPrimary.withOpacity(0.2), width: 2),
+                ),
+              ).animate(onPlay: (c) => c.repeat()).scale(begin: const Offset(0.5, 0.5), end: const Offset(1.5, 1.5), duration: 2.seconds).fade(end: 0),
+              Icon(Icons.search_off_rounded, size: 50, color: Constants.colorPrimary.withOpacity(0.5)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Text("NO MATCHES FOUND", style: Constants.headerStyle.copyWith(color: Constants.colorPrimary.withOpacity(0.8), letterSpacing: 4, fontSize: 14)),
+          const SizedBox(height: 8),
+          Text("Adjust your filters or query\nto decrypt more records.", textAlign: TextAlign.center, style: Constants.subHeaderStyle.copyWith(fontSize: 11)),
+        ],
+      ),
+    ).animate().fadeIn(duration: 600.ms).scale(curve: Curves.easeOutBack);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Determine how many active filters we have
     int filterCount = 0;
     if (_startDate != null) filterCount++;
     if (_selectedCategory != "All") filterCount++;
@@ -327,143 +560,105 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
     return Scaffold(
       backgroundColor: Constants.colorBackground,
       appBar: AppBar(
-        title: const Text("Search & Export"),
-        backgroundColor: Constants.colorSurface,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0, 
+        surfaceTintColor: Colors.transparent, 
+        centerTitle: false, 
+        title: Padding(
+          padding: const EdgeInsets.only(left: 8.0),
+          child: Text(
+            "SEARCH & EXPORT", 
+            style: Constants.headerStyle.copyWith(fontSize: 16, letterSpacing: 2)
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.download, color: Constants.colorPrimary),
+            icon: const Icon(Icons.file_download_outlined, color: Constants.colorPrimary, size: 24),
             tooltip: 'Export CSV',
             onPressed: _exportToCSV,
-          )
+          ).animate(onPlay: (c) => c.repeat(reverse: true)).moveY(begin: -2, end: 2, duration: 1.seconds),
+          const SizedBox(width: 8),
         ],
       ),
       body: Column(
         children: [
           // Search Bar & Filter Row
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: "Search merchant or description...",
-                      hintStyle: const TextStyle(color: Colors.grey),
-                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                      filled: true,
-                      fillColor: Constants.colorSurface,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
+                  child: Container(
+                    decoration: Constants.glassDecoration.copyWith(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(0.08)),
                     ),
-                    onSubmitted: (_) => _performSearch(),
+                    child: TextField(
+                      controller: _searchController,
+                      style: Constants.fontRegular.copyWith(color: Colors.white, fontSize: 15),
+                      decoration: InputDecoration(
+                        hintText: "Search registry...",
+                        hintStyle: Constants.fontRegular.copyWith(color: Colors.white30, letterSpacing: 1),
+                        prefixIcon: const Icon(Icons.search_rounded, color: Colors.white54, size: 20),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      onSubmitted: (_) => _performSearch(),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
+                ).animate().fadeIn().slideX(begin: -0.05),
+                const SizedBox(width: 12),
                 Stack(
                   children: [
                     Container(
-                      decoration: BoxDecoration(
-                        color: Constants.colorSurface,
-                        borderRadius: BorderRadius.circular(12),
+                      decoration: Constants.glassDecoration.copyWith(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
                       ),
                       child: IconButton(
-                        icon: const Icon(Icons.filter_list, color: Constants.colorPrimary),
+                        padding: const EdgeInsets.all(14),
+                        icon: const Icon(Icons.filter_list_rounded, color: Constants.colorAccent, size: 20),
                         onPressed: _openFilterDialog,
                       ),
                     ),
                     if (filterCount > 0)
                       Positioned(
-                        right: 0,
-                        top: 0,
+                        right: -2,
+                        top: -2,
                         child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Colors.redAccent,
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: Constants.colorError,
                             shape: BoxShape.circle,
+                            border: Border.all(color: Constants.colorBackground, width: 2),
                           ),
                           child: Text(
                             filterCount.toString(),
-                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                            style: const TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.w900),
                           ),
-                        ),
+                        ).animate().scale(curve: Curves.bounceOut),
                       )
                   ],
-                )
+                ).animate().fadeIn().slideX(begin: 0.05)
               ],
             ),
           ),
           
+          const SizedBox(height: 8),
+          
           if (_isLoading)
-            const Expanded(child: Center(child: CircularProgressIndicator()))
+            const Expanded(child: Center(child: CircularProgressIndicator(color: Constants.colorPrimary)))
           else if (_transactions.isEmpty)
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.search_off, size: 60, color: Colors.white.withOpacity(0.2)),
-                    const SizedBox(height: 16),
-                    const Text("No transactions found", style: TextStyle(color: Colors.grey)),
-                  ],
-                ),
-              ),
-            )
+            Expanded(child: _buildEmptyState())
           else
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.only(bottom: 40),
+                physics: const BouncingScrollPhysics(),
                 itemCount: _transactions.length,
                 itemBuilder: (context, index) {
-                  final txn = _transactions[index];
-                  final date = DateTime.fromMillisecondsSinceEpoch(txn.timestamp);
-                  
-                  return Card(
-                    color: Constants.colorSurface,
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    child: ListTile(
-                      onTap: () async {
-                        bool? updated = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => TransactionDetailScreen(transaction: txn),
-                          ),
-                        );
-                        if (updated == true) _performSearch();
-                      },
-                      leading: CircleAvatar(
-                        backgroundColor: _getCategoryColor(txn.category).withOpacity(0.2),
-                        child: Icon(
-                          _getCategoryIcon(txn.category),
-                          color: _getCategoryColor(txn.category),
-                          size: 20,
-                        ),
-                      ),
-                      title: Text(
-                        txn.merchant,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      subtitle: Text(
-                        "${txn.category} • ${DateFormat('MMM dd, yyyy').format(date)}",
-                        style: const TextStyle(color: Colors.grey, fontSize: 12),
-                      ),
-                      trailing: Text(
-                        "₹${txn.amount.toStringAsFixed(0)}",
-                        style: const TextStyle(
-                          color: Constants.colorPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  );
+                  return _buildTransactionItem(_transactions[index], index);
                 },
               ),
             ),

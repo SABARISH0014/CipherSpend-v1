@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart'; 
 import '../models/transaction_model.dart';
 import '../services/training_service.dart';
 import '../utils/constants.dart';
@@ -16,12 +17,12 @@ class TransactionDetailScreen extends StatefulWidget {
 
 class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   late String _selectedCategory;
-  late String _currentMerchant; // [NEW] Track merchant state locally
+  late String _currentMerchant;
   
   final TrainingService _trainingService = TrainingService();
   List<String> _categories = [];
   bool _isLoading = true;
-  bool _wasModified = false; // [NEW] Track if we need to refresh Dashboard on back
+  bool _wasModified = false; 
 
   @override
   void initState() {
@@ -49,65 +50,165 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("SYSTEM OVERRIDE: Shifted to $_selectedCategory"),
+        content: Text("SYSTEM OVERRIDE: Shifted to $_selectedCategory", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Constants.colorPrimary,
+        behavior: SnackBarBehavior.floating,
       ));
       Navigator.pop(context, true);
     }
   }
 
-  // [NEW] Dialog to edit the TARGET_NODE
   Future<void> _showEditMerchantDialog() async {
-    final TextEditingController controller =
-        TextEditingController(text: _currentMerchant);
+    final TextEditingController controller = TextEditingController(text: _currentMerchant);
+    
+    final List<String> payloadTokens = widget.transaction.body
+        .split(RegExp(r'\s+'))
+        .where((s) => s.trim().isNotEmpty)
+        .toList();
 
     final String? newMerchant = await showDialog<String>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: Constants.colorSurface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.edit, color: Constants.colorPrimary),
-              SizedBox(width: 10),
-              Text("Override Target Node",
-                  style: TextStyle(color: Colors.white, fontSize: 18)),
-            ],
-          ),
-          content: TextField(
-            controller: controller,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              labelText: "Merchant Name",
-              labelStyle: const TextStyle(color: Colors.grey),
-              filled: true,
-              fillColor: Colors.black26,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("CANCEL", style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Constants.colorPrimary,
-                foregroundColor: Colors.black,
-              ),
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
-              child: const Text("UPDATE"),
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: Constants.glassDecoration.copyWith(
+                  border: Border.all(color: Constants.colorAccent.withOpacity(0.5), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(color: Constants.colorAccent.withOpacity(0.1), blurRadius: 20, spreadRadius: 2)
+                  ]
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.hub_rounded, color: Constants.colorAccent),
+                        const SizedBox(width: 10),
+                        Text("Extract Target Node", style: Constants.headerStyle.copyWith(fontSize: 18)),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    
+                    TextField(
+                      controller: controller,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      decoration: InputDecoration(
+                        labelText: "Merchant Name",
+                        labelStyle: const TextStyle(color: Colors.grey),
+                        filled: true,
+                        fillColor: Colors.black45,
+                        prefixIcon: const Icon(Icons.storefront_rounded, color: Colors.white54),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.backspace_rounded, color: Constants.colorError, size: 20),
+                          tooltip: "Clear Buffer",
+                          onPressed: () {
+                            controller.clear();
+                          },
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Constants.colorAccent.withOpacity(0.5)),
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    Row(
+                      children: [
+                        const Icon(Icons.touch_app_rounded, color: Constants.colorAccent, size: 14),
+                        const SizedBox(width: 8),
+                        Text(
+                          "TAP FRAGMENTS TO EXTRACT", 
+                          style: Constants.fontRegular.copyWith(fontSize: 10, color: Constants.colorAccent, letterSpacing: 1.5, fontWeight: FontWeight.bold)
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    Container(
+                      height: 160, 
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.05)),
+                      ),
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: payloadTokens.map((token) {
+                            return InkWell(
+                              onTap: () {
+                                final currentText = controller.text.trim();
+                                if (currentText.isEmpty) {
+                                  controller.text = token;
+                                } else {
+                                  controller.text = "$currentText $token";
+                                }
+                                controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
+                              },
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Constants.colorAccent.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Constants.colorAccent.withOpacity(0.3)),
+                                ),
+                                child: Text(
+                                  token, 
+                                  style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 14)
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+                    
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text("CANCEL", style: Constants.fontRegular),
+                        ),
+                        const SizedBox(width: 12),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Constants.colorAccent,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: () => Navigator.pop(context, controller.text.trim()),
+                          child: const Text("UPDATE", style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ).animate().scale(curve: Curves.easeOutBack, duration: 400.ms),
+            );
+          }
         );
       },
     );
 
-    // If the user saved a new, valid merchant name
     if (newMerchant != null &&
         newMerchant.isNotEmpty &&
         newMerchant != _currentMerchant) {
@@ -125,21 +226,38 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("TARGET_NODE updated to $_currentMerchant"),
-            backgroundColor: Constants.colorPrimary,
+            content: Text("TARGET_NODE updated to $_currentMerchant", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            backgroundColor: Constants.colorAccent,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
     }
   }
 
+  // --- UI HELPER: Micro Header ---
+  Widget _buildSectionHeader(IconData icon, String title) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: Constants.colorPrimary),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.5),
+            fontSize: 10,
+            letterSpacing: 2,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final date =
-        DateTime.fromMillisecondsSinceEpoch(widget.transaction.timestamp);
+    final date = DateTime.fromMillisecondsSinceEpoch(widget.transaction.timestamp);
 
-    // [NEW] Use WillPopScope to pass back the `_wasModified` flag if the user
-    // presses the system back button so the Dashboard knows to refresh
     // ignore: deprecated_member_use
     return WillPopScope(
       onWillPop: () async {
@@ -149,10 +267,17 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       child: Scaffold(
         backgroundColor: Constants.colorBackground,
         appBar: AppBar(
-          title: const Text("Neural Override"),
-          backgroundColor: Constants.colorSurface,
+          title: Padding(
+            padding: const EdgeInsets.only(left: 8.0),
+            child: Text("NEURAL OVERRIDE", style: Constants.headerStyle.copyWith(fontSize: 16, letterSpacing: 2)),
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0, 
+          surfaceTintColor: Colors.transparent, 
+          centerTitle: false,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70, size: 20),
             onPressed: () => Navigator.pop(context, _wasModified),
           ),
         ),
@@ -160,43 +285,38 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             ? const Center(
                 child: CircularProgressIndicator(color: Constants.colorPrimary))
             : SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
+                // [BALANCED]: Medium padding
+                padding: const EdgeInsets.all(20),
+                physics: const BouncingScrollPhysics(),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. RAW SMS TERMINAL (The Evidence)
-                    const Text("> DECRYPTED_PAYLOAD",
-                        style: TextStyle(
-                            color: Constants.colorPrimary,
-                            fontFamily: 'monospace',
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
+                    
+                    // 1. RAW SMS TERMINAL
+                    _buildSectionHeader(Icons.terminal_rounded, "DECRYPTED_PAYLOAD").animate().fadeIn().slideX(),
+                    const SizedBox(height: 12), // [BALANCED]
 
-                    // Glowing Terminal Box
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(18), // [BALANCED]
                       decoration: BoxDecoration(
-                          color: Colors.black, // True black for terminal
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Constants.colorPrimary),
+                          color: Colors.black, 
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Constants.colorPrimary.withOpacity(0.3)),
                           boxShadow: [
                             BoxShadow(
-                              color: Constants.colorPrimary.withOpacity(0.15),
-                              blurRadius: 15,
+                              color: Constants.colorPrimary.withOpacity(0.1),
+                              blurRadius: 20,
                               spreadRadius: 2,
                             )
                           ]),
-                      // The Typing Animation Effect
                       child: TweenAnimationBuilder<int>(
                         tween: IntTween(
                             begin: 0, end: widget.transaction.body.length),
-                        duration: const Duration(milliseconds: 1200),
+                        duration: const Duration(milliseconds: 1000),
                         builder: (context, value, child) {
                           String visibleText =
                               widget.transaction.body.substring(0, value);
-                          // Add a blinking block cursor at the end while typing
                           String cursor =
                               value < widget.transaction.body.length ? "█" : "";
                           return Text(
@@ -204,47 +324,50 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             style: const TextStyle(
                                 fontFamily: 'monospace',
                                 color: Constants.colorPrimary,
-                                fontSize: 15,
-                                height: 1.5),
+                                fontSize: 14, // [BALANCED] Font back to 14
+                                height: 1.5), 
                           );
                         },
                       ),
-                    ),
+                    ).animate().fadeIn(delay: 200.ms).scaleY(alignment: Alignment.topCenter),
 
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 28), // [BALANCED]
 
-                    // 2. TRANSACTION DETAILS
-                    _buildFactRow(
-                        "EXTRACTED_AMT", "₹${widget.transaction.amount}"),
+                    // 2. TRANSACTION DETAILS (Wrapped in Glassmorphism)
+                    _buildSectionHeader(Icons.analytics_rounded, "EXTRACTED_METADATA").animate().fadeIn(delay: 300.ms),
+                    const SizedBox(height: 12), // [BALANCED]
                     
-                    // [UPDATED] Pass the callback to make TARGET_NODE editable
-                    _buildFactRow("TARGET_NODE", _currentMerchant, 
-                        onEdit: _showEditMerchantDialog),
-                        
-                    _buildFactRow("PAYMENT_VECTOR", widget.transaction.type),
-                    _buildFactRow("TIMESTAMP",
-                        "${date.day}/${date.month} ${date.hour}:${date.minute}"),
+                    Container(
+                      padding: const EdgeInsets.all(18), // [BALANCED]
+                      decoration: Constants.glassDecoration.copyWith(
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        boxShadow: []
+                      ),
+                      child: Column(
+                        children: [
+                          _buildFactRow("EXTRACTED_AMT", "₹${widget.transaction.amount}"),
+                          const Divider(color: Colors.white10, height: 20), // [BALANCED]
+                          _buildFactRow("TARGET_NODE", _currentMerchant, onEdit: _showEditMerchantDialog, highlightColor: Constants.colorAccent),
+                          const Divider(color: Colors.white10, height: 20), // [BALANCED]
+                          _buildFactRow("PAYMENT_VECTOR", widget.transaction.type),
+                          const Divider(color: Colors.white10, height: 20), // [BALANCED]
+                          _buildFactRow("TIMESTAMP", "${date.day}/${date.month} ${date.hour}:${date.minute}"),
+                        ],
+                      ),
+                    ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.1),
 
-                    const SizedBox(height: 30),
-                    Divider(color: Constants.colorPrimary.withOpacity(0.3)),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 28), // [BALANCED]
 
                     // 3. TRAINING INPUT
-                    const Text("> INJECT_NEW_CATEGORY",
-                        style: TextStyle(
-                            color: Constants.colorPrimary,
-                            fontFamily: 'monospace',
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
+                    _buildSectionHeader(Icons.category_rounded, "INJECT_NEW_CATEGORY").animate().fadeIn(delay: 500.ms),
+                    const SizedBox(height: 12), // [BALANCED]
 
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                          color: Constants.colorSurface,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: Constants.colorPrimary.withOpacity(0.5))),
+                      decoration: Constants.glassDecoration.copyWith(
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        boxShadow: []
+                      ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           value: _categories.contains(_selectedCategory)
@@ -252,16 +375,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                               : null,
                           isExpanded: true,
                           dropdownColor: Constants.colorSurface,
-                          icon: const Icon(Icons.arrow_drop_down,
+                          icon: const Icon(Icons.arrow_drop_down_rounded,
                               color: Constants.colorPrimary),
-                          style: const TextStyle(
-                              color: Constants.colorPrimary,
-                              fontFamily: 'monospace',
-                              fontSize: 16),
+                          style: Constants.fontRegular.copyWith(
+                              color: Colors.white,
+                              fontSize: 16, // [BALANCED] Font back up to 16
+                              fontWeight: FontWeight.bold),
                           items: _categories.map((String value) {
                             return DropdownMenuItem<String>(
                               value: value,
-                              child: Text(value.toUpperCase()), // Hackery caps
+                              child: Text(value.toUpperCase()),
                             );
                           }).toList(),
                           onChanged: (newValue) {
@@ -269,43 +392,45 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           },
                         ),
                       ),
-                    ),
+                    ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.1),
 
-                    const SizedBox(height: 50),
+                    const SizedBox(height: 36), // [BALANCED]
 
                     // 4. ACTION BUTTON
                     SizedBox(
                       width: double.infinity,
-                      height: 50,
+                      height: 54, // [BALANCED] Raised from 52 to 54
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                             backgroundColor: Constants.colorPrimary,
                             foregroundColor: Colors.black,
+                            elevation: 8,
+                            shadowColor: Constants.colorPrimary.withOpacity(0.4),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8))),
-                        icon: const Icon(Icons.memory),
+                                borderRadius: BorderRadius.circular(12))),
+                        icon: const Icon(Icons.sync_rounded, size: 20),
                         onPressed: _saveTraining,
                         label: const Text("EXECUTE OVERRIDE",
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontFamily: 'monospace',
-                                letterSpacing: 2)),
+                                letterSpacing: 2,
+                                fontSize: 14)), // [BALANCED]
                       ),
-                    ),
+                    ).animate().fadeIn(delay: 700.ms).scale(),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14), // [BALANCED]
 
                     // 5. REGEX TRAINING BUTTON
                     SizedBox(
                       width: double.infinity,
-                      height: 50,
+                      height: 54, // [BALANCED] Raised from 52 to 54
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                            foregroundColor: Constants.colorPrimary,
-                            side: const BorderSide(color: Constants.colorPrimary),
+                            foregroundColor: Constants.colorAccent,
+                            side: const BorderSide(color: Constants.colorAccent, width: 1.5),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8))),
-                        icon: const Icon(Icons.model_training),
+                                borderRadius: BorderRadius.circular(12))),
+                        icon: const Icon(Icons.model_training_rounded, size: 20),
                         onPressed: () {
                           Navigator.push(
                             context,
@@ -320,10 +445,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         label: const Text("TRAIN REGEX PARSER",
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontFamily: 'monospace',
-                                letterSpacing: 2)),
+                                letterSpacing: 2,
+                                fontSize: 14)), // [BALANCED]
                       ),
-                    )
+                    ).animate().fadeIn(delay: 800.ms).scale(),
+                    
+                    const SizedBox(height: 20), // Bottom padding
                   ],
                 ),
               ),
@@ -331,48 +458,42 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     );
   }
 
-  // [UPDATED] Helper to allow onTap action and render an edit icon
-  Widget _buildFactRow(String label, String value, {VoidCallback? onEdit}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: CrossAxisAlignment.start, 
-        children: [
-          Text(label,
-              style: const TextStyle(
-                  color: Colors.white54, fontFamily: 'monospace')),
-          const SizedBox(width: 16), 
-          Expanded(
-            child: GestureDetector(
-              onTap: onEdit,
-              behavior: HitTestBehavior.opaque, // Ensures the whole row is clickable
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Flexible(
-                    child: Text(
-                      value,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'monospace',
-                          fontSize: 14),
-                    ),
+  Widget _buildFactRow(String label, String value, {VoidCallback? onEdit, Color? highlightColor}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start, 
+      children: [
+        Text(label, style: Constants.fontRegular.copyWith(fontSize: 12, color: Colors.white70)), // [BALANCED]
+        const SizedBox(width: 16), 
+        Expanded(
+          child: GestureDetector(
+            onTap: onEdit,
+            behavior: HitTestBehavior.opaque, 
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Flexible(
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                        color: highlightColor ?? Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'monospace',
+                        fontSize: 14), // [BALANCED] 
                   ),
-                  if (onEdit != null) ...[
-                    const SizedBox(width: 8),
-                    const Icon(Icons.edit,
-                        color: Constants.colorPrimary, size: 16),
-                  ]
-                ],
-              ),
+                ),
+                if (onEdit != null) ...[
+                  const SizedBox(width: 8),
+                  Icon(Icons.edit_rounded,
+                      color: highlightColor ?? Constants.colorPrimary, size: 16),
+                ]
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

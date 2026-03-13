@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../models/transaction_model.dart';
 import '../services/sms_service.dart';
 import '../services/training_service.dart';
@@ -42,7 +43,6 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
     _loadCategories();
   }
 
-  // Load the AI categories dynamically so the dropdown matches your labels.json
   Future<void> _loadCategories() async {
     final cats = await _trainingService.getCategories();
     if (cats.isNotEmpty) {
@@ -68,7 +68,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
             colorScheme: const ColorScheme.dark(
               primary: Constants.colorPrimary,
               onPrimary: Colors.black,
-              surface: Constants.colorSurface,
+              surface: Constants.colorBackground,
               onSurface: Colors.white,
             ),
           ),
@@ -90,7 +90,6 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
       double amount = double.parse(_amountController.text.trim());
       String merchant = _merchantController.text.trim();
 
-      // Create a unique hash for manual entries
       String hash = "MANUAL_${DateTime.now().millisecondsSinceEpoch}";
 
       final txn = TransactionModel(
@@ -108,17 +107,68 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("✅ Transaction Logged Manually"),
+          SnackBar(
+            content: Text(
+              "✅ Manual Record Injected",
+              style: Constants.fontRegular.copyWith(
+                color: Colors.black, 
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             backgroundColor: Constants.colorPrimary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
-        Navigator.pop(
-          context,
-          true,
-        ); // Return true to signal a refresh is needed
+        Navigator.pop(context, true); 
       }
     }
+  }
+
+  // --- UI HELPER: Micro Header ---
+  Widget _buildSectionHeader(IconData icon, String title) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: Constants.colorPrimary),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.5),
+            fontSize: 10,
+            letterSpacing: 2,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- UI HELPER: Glassmorphism Input Decoration ---
+  InputDecoration _buildInputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: Colors.white38, fontSize: 13, letterSpacing: 0.5),
+      prefixIcon: Icon(icon, color: Colors.white54, size: 20),
+      filled: true,
+      fillColor: Colors.black26,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16), 
+        borderSide: BorderSide(color: Colors.white.withOpacity(0.05), width: 1)
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16), 
+        borderSide: BorderSide(color: Constants.colorPrimary.withOpacity(0.5), width: 1.5)
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16), 
+        borderSide: BorderSide(color: Constants.colorError.withOpacity(0.5), width: 1.5)
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16), 
+        borderSide: const BorderSide(color: Constants.colorError, width: 1.5)
+      ),
+    );
   }
 
   @override
@@ -126,186 +176,166 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
     return Scaffold(
       backgroundColor: Constants.colorBackground,
       appBar: AppBar(
-        title: const Text("Log Expense"),
-        backgroundColor: Constants.colorSurface,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0, 
+        surfaceTintColor: Colors.transparent, 
+        centerTitle: false,
+        title: Padding(
+          padding: const EdgeInsets.only(left: 8.0),
+          child: Text(
+            "MANUAL ENTRY", 
+            style: Constants.headerStyle.copyWith(fontSize: 16, letterSpacing: 2)
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: Constants.colorPrimary),
             )
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              physics: const BouncingScrollPhysics(),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // AMOUNT INPUT
+                    
+                    // 1. AMOUNT MODULE
+                    _buildSectionHeader(Icons.data_usage_rounded, "FINANCIAL IMPACT").animate().fadeIn(delay: 100.ms),
+                    const SizedBox(height: 16),
                     TextFormField(
                       controller: _amountController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      textInputAction: TextInputAction.none,
+                      style: Constants.headerStyle.copyWith(
+                        color: Constants.colorPrimary,
+                        fontSize: 28,
+                        letterSpacing: 1
                       ),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: "Amount (₹)",
-                        labelStyle: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 16,
-                        ),
-                        prefixIcon: const Icon(
-                          Icons.currency_rupee,
-                          color: Constants.colorPrimary,
-                        ),
-                        filled: true,
-                        fillColor: Constants.colorSurface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
+                      decoration: _buildInputDecoration("Amount (₹)", Icons.currency_rupee_rounded).copyWith(
+                        prefixIcon: const Icon(Icons.currency_rupee_rounded, color: Constants.colorPrimary, size: 24),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 20),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty)
-                          return 'Please enter an amount';
-                        if (double.tryParse(value) == null ||
-                            double.parse(value) <= 0)
-                          return 'Enter a valid number';
+                        if (value == null || value.isEmpty) return 'Required parameter missing';
+                        if (double.tryParse(value) == null || double.parse(value) <= 0) return 'Invalid numeric format';
                         return null;
                       },
-                    ),
-                    const SizedBox(height: 20),
+                    ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.05),
+                    
+                    const SizedBox(height: 32),
 
-                    // MERCHANT INPUT
+                    // 2. MERCHANT MODULE
+                    _buildSectionHeader(Icons.storefront_rounded, "TARGET NODE").animate().fadeIn(delay: 200.ms),
+                    const SizedBox(height: 16),
                     TextFormField(
                       controller: _merchantController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: "Merchant / Reason",
-                        labelStyle: const TextStyle(color: Colors.grey),
-                        prefixIcon: const Icon(Icons.store, color: Colors.grey),
-                        filled: true,
-                        fillColor: Constants.colorSurface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                      decoration: _buildInputDecoration("Merchant / Reason", Icons.edit_note_rounded),
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty)
-                          return 'Please enter a merchant or reason';
+                        if (value == null || value.trim().isEmpty) return 'Node identity required';
                         return null;
                       },
-                    ),
-                    const SizedBox(height: 20),
+                    ).animate().fadeIn(delay: 100.ms, duration: 400.ms).slideX(begin: -0.05),
+                    
+                    const SizedBox(height: 32),
 
-                    // CATEGORY DROPDOWN
-                    DropdownButtonFormField<String>(
-                      value: _selectedCategory,
-                      dropdownColor: Constants.colorSurface,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: "Category",
-                        labelStyle: const TextStyle(color: Colors.grey),
-                        prefixIcon: const Icon(
-                          Icons.category,
-                          color: Colors.grey,
+                    // 3. CLASSIFICATION MODULE
+                    _buildSectionHeader(Icons.category_rounded, "CLASSIFICATION").animate().fadeIn(delay: 300.ms),
+                    const SizedBox(height: 16),
+                    
+                    Row(
+                      children: [
+                        // Category Dropdown
+                        Expanded(
+                          flex: 5,
+                          child: DropdownButtonFormField<String>(
+                            isExpanded: true, // [FIX] Prevents overflow by shrinking long text
+                            value: _selectedCategory,
+                            dropdownColor: Constants.colorSurface,
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                            decoration: _buildInputDecoration("Category", Icons.folder_open_rounded),
+                            items: _categories.map((String cat) {
+                              return DropdownMenuItem(
+                                value: cat, 
+                                child: Text(cat.toUpperCase(), overflow: TextOverflow.ellipsis), // [FIX] Added ellipsis safety
+                              );
+                            }).toList(),
+                            onChanged: (value) => setState(() => _selectedCategory = value!),
+                          ).animate().fadeIn(delay: 200.ms, duration: 400.ms).slideX(begin: -0.05),
                         ),
-                        filled: true,
-                        fillColor: Constants.colorSurface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
+                        
+                        const SizedBox(width: 12), // Slightly reduced spacing to give text more room
+                        
+                        // Type Dropdown
+                        Expanded(
+                          flex: 5, // Balanced the flex to give "Bank Transfer" more room
+                          child: DropdownButtonFormField<String>(
+                            isExpanded: true, // [FIX] Prevents overflow
+                            value: _selectedType,
+                            dropdownColor: Constants.colorSurface,
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                            decoration: _buildInputDecoration("Vector", Icons.account_tree_rounded),
+                            items: _paymentTypes.map((String type) {
+                              return DropdownMenuItem(
+                                value: type, 
+                                child: Text(type, overflow: TextOverflow.ellipsis), // [FIX] Added ellipsis safety
+                              );
+                            }).toList(),
+                            onChanged: (value) => setState(() => _selectedType = value!),
+                          ).animate().fadeIn(delay: 300.ms, duration: 400.ms).slideX(begin: 0.05),
                         ),
-                      ),
-                      items: _categories.map((String cat) {
-                        return DropdownMenuItem(
-                          value: cat,
-                          child: Text(cat.toUpperCase()),
-                        );
-                      }).toList(),
-                      onChanged: (value) =>
-                          setState(() => _selectedCategory = value!),
+                      ],
                     ),
-                    const SizedBox(height: 20),
+                    
+                    const SizedBox(height: 32),
 
-                    // TYPE DROPDOWN
-                    DropdownButtonFormField<String>(
-                      value: _selectedType,
-                      dropdownColor: Constants.colorSurface,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        labelText: "Payment Mode",
-                        labelStyle: const TextStyle(color: Colors.grey),
-                        prefixIcon: const Icon(
-                          Icons.account_balance_wallet,
-                          color: Colors.grey,
-                        ),
-                        filled: true,
-                        fillColor: Constants.colorSurface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                      items: _paymentTypes.map((String type) {
-                        return DropdownMenuItem(value: type, child: Text(type));
-                      }).toList(),
-                      onChanged: (value) =>
-                          setState(() => _selectedType = value!),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // DATE PICKER
+                    // 4. TEMPORAL DATA MODULE
+                    _buildSectionHeader(Icons.access_time_rounded, "TEMPORAL DATA").animate().fadeIn(delay: 400.ms),
+                    const SizedBox(height: 16),
+                    
                     InkWell(
                       onTap: () => _selectDate(context),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 16,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
                         decoration: BoxDecoration(
-                          color: Constants.colorSurface,
-                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.black26,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white.withOpacity(0.05), width: 1),
                         ),
                         child: Row(
                           children: [
-                            const Icon(
-                              Icons.calendar_today,
-                              color: Colors.grey,
-                            ),
-                            const SizedBox(width: 12),
+                            const Icon(Icons.calendar_today_rounded, color: Colors.white54, size: 20),
+                            const SizedBox(width: 16),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   "Transaction Date",
-                                  style: TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 12,
-                                  ),
+                                  style: const TextStyle(color: Colors.white38, fontSize: 12),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  DateFormat(
-                                    'dd MMMM yyyy',
-                                  ).format(_selectedDate),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                  ),
+                                  DateFormat('dd MMMM yyyy').format(_selectedDate),
+                                  style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
                                 ),
                               ],
                             ),
+                            const Spacer(),
+                            const Icon(Icons.edit_calendar_rounded, color: Constants.colorPrimary, size: 18),
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 40),
+                    ).animate().fadeIn(delay: 400.ms, duration: 400.ms).slideY(begin: 0.1),
+                    
+                    const SizedBox(height: 48),
 
                     // SAVE BUTTON
                     SizedBox(
@@ -315,22 +345,26 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Constants.colorPrimary,
                           foregroundColor: Colors.black,
+                          elevation: 8,
+                          shadowColor: Constants.colorPrimary.withOpacity(0.4),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                        icon: const Icon(Icons.add_circle_outline),
+                        icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
                         label: const Text(
-                          "SAVE EXPENSE",
+                          "INJECT RECORD",
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            letterSpacing: 1,
+                            letterSpacing: 2,
                           ),
                         ),
                         onPressed: _saveTransaction,
                       ),
-                    ),
+                    ).animate().fadeIn(delay: 500.ms).scale(curve: Curves.easeOutBack),
+                    
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
