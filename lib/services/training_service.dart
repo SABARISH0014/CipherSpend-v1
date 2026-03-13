@@ -33,9 +33,20 @@ class TrainingService {
       whereArgs: [hash],
     );
 
-    // Week 3 "Pro" Tip: In a production app, you would also save this
-    // to a separate 'training_data.csv' file locally so you can
-    // re-train your TFLite model later with actual user data.
     print("AI Feedback Received: Transaction $hash is now $newCategory");
+  }
+
+  /// [NEW] Update the merchant name (TARGET_NODE) in the DB
+  Future<void> updateMerchantName(String hash, String newMerchant) async {
+    final db = await _db.database;
+
+    await db.update(
+      Constants.tableTransactions,
+      {'merchant': newMerchant},
+      where: 'hash = ?',
+      whereArgs: [hash],
+    );
+
+    print("Manual Override: Merchant updated to $newMerchant");
   }
 }
