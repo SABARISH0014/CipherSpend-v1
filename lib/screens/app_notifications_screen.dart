@@ -151,17 +151,20 @@ class _AppNotificationsScreenState extends State<AppNotificationsScreen> {
                               key: Key(item['id'].toString()),
                               direction: DismissDirection.endToStart,
                               onDismissed: (direction) {
-                                _deleteNotification(item['id']);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text("Log expunged", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                                    backgroundColor: Constants.colorAccent,
-                                    duration: const Duration(seconds: 2),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              },
+  _deleteNotification(item['id']);
+  
+  // Clear old snackbars first
+  ScaffoldMessenger.of(context).clearSnackBars();
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: const Text("Log expunged", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+      backgroundColor: Constants.colorAccent,
+      duration: const Duration(seconds: 2), // Improved duration
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      behavior: SnackBarBehavior.floating,
+    ),
+  );
+},
                               background: Container(
                                 alignment: Alignment.centerRight,
                                 padding: const EdgeInsets.only(right: 24),

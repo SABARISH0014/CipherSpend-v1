@@ -289,14 +289,16 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
     );
   }
 
-// --- DIRECT DOWNLOAD EXPORT LOGIC ---
+// Update _exportToCSV:
   Future<void> _exportToCSV() async {
     if (_transactions.isEmpty) {
+      ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("No transactions to export.", style: Constants.fontRegular.copyWith(color: Colors.black, fontWeight: FontWeight.bold)),
           backgroundColor: Colors.orangeAccent,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2), // Added duration
         ),
       );
       return;
@@ -336,25 +338,28 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
         // This opens the Android file picker and returns the path if the user saves it
         final filePath = await FlutterFileDialog.saveFile(params: params);
 
-        // 3. Show Success Message if they didn't cancel
-        if (filePath != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Successfully saved to Downloads folder!", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-              backgroundColor: Constants.colorPrimary,
-              duration: Duration(seconds: 4),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
+// 3. Show Success Message if they didn't cancel
+      if (filePath != null && mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Successfully saved to Downloads folder!", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            backgroundColor: Constants.colorPrimary,
+            duration: Duration(seconds: 2), // Reduced from 4 to 2
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
-    } catch (e) {
+    }
+  } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Export failed: $e", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             backgroundColor: Constants.colorError,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3), // Shortened duration
           ),
         );
       }
@@ -407,12 +412,13 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
       ),
       child: InkWell(
         onTap: () async {
-          bool? updated = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => TransactionDetailScreen(transaction: txn)),
-          );
-          if (updated == true) _performSearch();
-        },
+    ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing before routing!
+    bool? updated = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => TransactionDetailScreen(transaction: txn)),
+    );
+    if (updated == true) _performSearch();
+  },
         borderRadius: BorderRadius.circular(16),
         child: Container(
           clipBehavior: Clip.antiAlias,

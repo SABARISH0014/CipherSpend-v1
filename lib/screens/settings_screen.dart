@@ -49,22 +49,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // --- LOGOUT LOGIC ---
   void _logout() {
+    ScaffoldMessenger.of(context).clearSnackBars(); // Add this line to kill lingering toasts
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const VerificationScreen()),
       (route) => false,
     );
   }
-
   // --- KILL SWITCH LOGIC ---
-  Future<void> _triggerKillSwitch() async {
+Future<void> _triggerKillSwitch() async {
     bool auth = await _auth.authenticateBiometric();
     if (!auth) {
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Auth Failed. Cannot Wipe Data.", style: Constants.fontRegular.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
             backgroundColor: Constants.colorError,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2), // Added duration
           ),
         );
       }
@@ -88,29 +90,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await DBService().deleteDB();
       await _auth.nuclearWipe();
       await Future.delayed(const Duration(seconds: 2));
-
+      
       if (mounted) {
-        Navigator.of(context).pop();
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const VerificationScreen()),
-          (route) => false,
-        );
+        Navigator.of(context).pop(); // dismiss dialog
+        
+        ScaffoldMessenger.of(context).clearSnackBars(); // Clear before routing!
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("♻ System Reset Complete", style: Constants.fontRegular.copyWith(color: Colors.black, fontWeight: FontWeight.bold)),
             backgroundColor: Constants.colorPrimary,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2), // Added duration
           ),
+        );
+        
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const VerificationScreen()),
+          (route) => false,
         );
       }
     } catch (e) {
       if (mounted) {
         Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Wipe Failed: $e", style: const TextStyle(color: Colors.white)),
             backgroundColor: Constants.colorError,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2), // Added duration
           ),
         );
       }

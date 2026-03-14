@@ -47,12 +47,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     setState(() => _isLoading = true);
     await _trainingService.trainTransaction(
         widget.transaction.hash, _selectedCategory);
-
     if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text("SYSTEM OVERRIDE: Shifted to $_selectedCategory", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Constants.colorPrimary,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2), // Added duration
       ));
       Navigator.pop(context, true);
     }
@@ -186,17 +187,20 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       children: [
                         TextButton(
                           onPressed: () => Navigator.pop(context),
-                          child: Text("CANCEL", style: Constants.fontRegular),
+                          child: Text("CANCEL", style: Constants.fontRegular.copyWith(color: Colors.white70)),
                         ),
                         const SizedBox(width: 12),
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14), // <-- Adjusted padding here
                             backgroundColor: Constants.colorAccent,
                             foregroundColor: Colors.black,
+                            elevation: 4,
+                            shadowColor: Constants.colorAccent.withValues(alpha: 0.4),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
                           onPressed: () => Navigator.pop(context, controller.text.trim()),
-                          child: const Text("UPDATE", style: TextStyle(fontWeight: FontWeight.bold)),
+                          child: const Text("UPDATE", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
                         ),
                       ],
                     ),
@@ -209,26 +213,22 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       },
     );
 
-    if (newMerchant != null &&
-        newMerchant.isNotEmpty &&
-        newMerchant != _currentMerchant) {
+    if (newMerchant != null && newMerchant.isNotEmpty && newMerchant != _currentMerchant) {
       setState(() => _isLoading = true);
-      
-      await _trainingService.updateMerchantName(
-          widget.transaction.hash, newMerchant);
-          
+      await _trainingService.updateMerchantName(widget.transaction.hash, newMerchant);
       setState(() {
         _currentMerchant = newMerchant;
         _wasModified = true;
         _isLoading = false;
       });
-
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("TARGET_NODE updated to $_currentMerchant", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
             backgroundColor: Constants.colorAccent,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2), // Added duration
           ),
         );
       }
@@ -432,16 +432,17 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                 borderRadius: BorderRadius.circular(12))),
                         icon: const Icon(Icons.model_training_rounded, size: 20),
                         onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => InteractiveTrainingScreen(
-                                smsBody: widget.transaction.body,
-                                sender: widget.transaction.sender,
-                              ),
-                            ),
-                          );
-                        },
+      ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing before routing!
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => InteractiveTrainingScreen(
+            smsBody: widget.transaction.body,
+            sender: widget.transaction.sender,
+          ),
+        ),
+      );
+    },
                         label: const Text("TRAIN REGEX PARSER",
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,

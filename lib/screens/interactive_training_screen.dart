@@ -266,6 +266,7 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
 
   Future<void> _generateAndSaveRule() async {
     if (_amountIndex == null || _merchantIndices.isEmpty) {
+      ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -274,6 +275,7 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
           ),
           backgroundColor: Colors.orangeAccent,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2), // Added duration
         ),
       );
       return;
@@ -308,11 +310,11 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
       }
     }
 
-    String finalRegex = regexParts.join(r'\s+');
-
+String finalRegex = regexParts.join(r'\s+');
     try {
       await DBService().saveCustomRule(widget.sender, finalRegex);
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -321,23 +323,26 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
             ),
             backgroundColor: Constants.colorPrimary,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2), // Added duration
           ),
         );
         Navigator.pop(context, true); 
       }
     } catch (e) {
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Syntax Error: $e", style: const TextStyle(color: Colors.white)),
             backgroundColor: Constants.colorError,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2), // Added duration
           ),
         );
       }
     }
   }
-
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(

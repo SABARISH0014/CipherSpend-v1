@@ -84,23 +84,22 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(Constants.prefUserName, name);
     await prefs.setDouble(Constants.prefMonthlyBudget, budget);
-    
-    // Save image path
     if (_profileImagePath != null) {
       await prefs.setString('pref_profile_image', _profileImagePath!);
     }
-
     if (pin.isNotEmpty) {
       await _authService.saveMpin(pin);
     }
 
     if (mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text("Profile updated successfully!", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           backgroundColor: Constants.colorPrimary,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 2), // Added duration
         ),
       );
       Navigator.pop(context);

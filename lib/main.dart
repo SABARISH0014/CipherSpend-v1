@@ -34,6 +34,15 @@ class MyApp extends StatelessWidget {
         primaryColor: Constants.colorPrimary,
         scaffoldBackgroundColor: Constants.colorBackground,
 
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          backgroundColor: Constants.colorSurface, // Default background if you forget to set one
+          contentTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+
         // AppBar Styling
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent, // Sleek transparent app bar

@@ -83,16 +83,15 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
     }
   }
 
-  Future<void> _saveTransaction() async {
+Future<void> _saveTransaction() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
-
       double amount = double.parse(_amountController.text.trim());
       String merchant = _merchantController.text.trim();
 
       String hash = "MANUAL_${DateTime.now().millisecondsSinceEpoch}";
-
       final txn = TransactionModel(
+
         hash: hash,
         sender: "User",
         body: "Manual Entry: $merchant",
@@ -106,6 +105,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
       await _smsService.saveTransaction(txn);
 
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -118,6 +118,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
             backgroundColor: Constants.colorPrimary,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 2), // Added duration
           ),
         );
         Navigator.pop(context, true); 
