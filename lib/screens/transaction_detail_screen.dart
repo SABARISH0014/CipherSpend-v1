@@ -77,9 +77,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               child: Container(
                 padding: const EdgeInsets.all(24),
                 decoration: Constants.glassDecoration.copyWith(
-                  border: Border.all(color: Constants.colorAccent.withOpacity(0.5), width: 1.5),
+                  border: Border.all(color: Constants.colorAccent.withValues(alpha: 0.5), width: 1.5),
                   boxShadow: [
-                    BoxShadow(color: Constants.colorAccent.withOpacity(0.1), blurRadius: 20, spreadRadius: 2)
+                    BoxShadow(color: Constants.colorAccent.withValues(alpha: 0.1), blurRadius: 20, spreadRadius: 2)
                   ]
                 ),
                 child: Column(
@@ -113,11 +113,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Constants.colorAccent.withOpacity(0.5)),
+                          borderSide: BorderSide(color: Constants.colorAccent.withValues(alpha: 0.5)),
                         ),
                       ),
                     ),
@@ -142,7 +142,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       decoration: BoxDecoration(
                         color: Colors.black26,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.05)),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                       ),
                       child: SingleChildScrollView(
                         physics: const BouncingScrollPhysics(),
@@ -164,9 +164,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                               child: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: Constants.colorAccent.withOpacity(0.1),
+                                  color: Constants.colorAccent.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: Constants.colorAccent.withOpacity(0.3)),
+                                  border: Border.all(color: Constants.colorAccent.withValues(alpha: 0.3)),
                                 ),
                                 child: Text(
                                   token, 
@@ -244,7 +244,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         Text(
           title,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.5),
+            color: Colors.white.withValues(alpha: 0.5),
             fontSize: 10,
             letterSpacing: 2,
             fontWeight: FontWeight.bold,
@@ -302,10 +302,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       decoration: BoxDecoration(
                           color: Colors.black, 
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Constants.colorPrimary.withOpacity(0.3)),
+                          border: Border.all(color: Constants.colorPrimary.withValues(alpha: 0.3)),
                           boxShadow: [
                             BoxShadow(
-                              color: Constants.colorPrimary.withOpacity(0.1),
+                              color: Constants.colorPrimary.withValues(alpha: 0.1),
                               blurRadius: 20,
                               spreadRadius: 2,
                             )
@@ -340,7 +340,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     Container(
                       padding: const EdgeInsets.all(18), // [BALANCED]
                       decoration: Constants.glassDecoration.copyWith(
-                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                         boxShadow: []
                       ),
                       child: Column(
@@ -365,7 +365,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: Constants.glassDecoration.copyWith(
-                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                         boxShadow: []
                       ),
                       child: DropdownButtonHideUnderline(
@@ -405,7 +405,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             backgroundColor: Constants.colorPrimary,
                             foregroundColor: Colors.black,
                             elevation: 8,
-                            shadowColor: Constants.colorPrimary.withOpacity(0.4),
+                            shadowColor: Constants.colorPrimary.withValues(alpha: 0.4),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12))),
                         icon: const Icon(Icons.sync_rounded, size: 20),

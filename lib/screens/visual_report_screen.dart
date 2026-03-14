@@ -84,7 +84,7 @@ class _VisualReportScreenState extends State<VisualReportScreen>
                   Text(
                     "SANKEY NETWORK",
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
+                      color: Colors.white.withValues(alpha: 0.5),
                       fontSize: 10,
                       letterSpacing: 2,
                       fontWeight: FontWeight.bold,
@@ -100,7 +100,7 @@ class _VisualReportScreenState extends State<VisualReportScreen>
               padding: const EdgeInsets.symmetric(vertical: 24),
               decoration: Constants.glassDecoration.copyWith(
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withOpacity(0.05)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
               ),
               child: Center(
                 child: AnimatedBuilder(
@@ -132,7 +132,7 @@ class _VisualReportScreenState extends State<VisualReportScreen>
                   Text(
                     "SPEND BREAKDOWN",
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.5),
+                      color: Colors.white.withValues(alpha: 0.5),
                       fontSize: 10,
                       letterSpacing: 2,
                       fontWeight: FontWeight.bold,
@@ -170,7 +170,7 @@ class _VisualReportScreenState extends State<VisualReportScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: catColor.withOpacity(0.03),
+            color: catColor.withValues(alpha: 0.03),
             blurRadius: 12,
             spreadRadius: 2,
             offset: const Offset(0, 4),
@@ -180,14 +180,14 @@ class _VisualReportScreenState extends State<VisualReportScreen>
       child: Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: Constants.colorSurface.withOpacity(0.6),
+          color: Constants.colorSurface.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
           gradient: LinearGradient(
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
             colors: [
-              catColor.withOpacity(0.1),
+              catColor.withValues(alpha: 0.1),
               Colors.transparent,
             ],
           ),
@@ -202,7 +202,7 @@ class _VisualReportScreenState extends State<VisualReportScreen>
                   color: catColor,
                   boxShadow: [
                     BoxShadow(
-                      color: catColor.withOpacity(0.8),
+                      color: catColor.withValues(alpha: 0.8),
                       blurRadius: 8,
                       spreadRadius: 1,
                     )
@@ -215,9 +215,9 @@ class _VisualReportScreenState extends State<VisualReportScreen>
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: catColor.withOpacity(0.08),
+                  color: catColor.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: catColor.withOpacity(0.2), width: 1),
+                  border: Border.all(color: catColor.withValues(alpha: 0.2), width: 1),
                 ),
                 child: Icon(Icons.circle, color: catColor, size: 12),
               ),
@@ -229,7 +229,7 @@ class _VisualReportScreenState extends State<VisualReportScreen>
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   child: Text(
                     cat.toUpperCase(),
-                    style: TextStyle(color: Colors.white.withOpacity(0.9), fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1),
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1),
                   ),
                 ),
               ),
@@ -240,7 +240,7 @@ class _VisualReportScreenState extends State<VisualReportScreen>
                 decoration: BoxDecoration(
                   color: Colors.black45,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white.withOpacity(0.05)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                 ),
                 child: Text(
                   "${percent.toStringAsFixed(1)}%",
@@ -336,7 +336,7 @@ class SankeyPainter extends CustomPainter {
 
       // Dim Background Flow
       Paint flowPaint = Paint()
-        ..color = categoryColor.withOpacity(0.1) 
+        ..color = categoryColor.withValues(alpha: 0.1) 
         ..style = PaintingStyle.stroke
         ..strokeWidth = catHeight * 0.7 
         ..strokeCap = StrokeCap.round;
@@ -351,7 +351,7 @@ class SankeyPainter extends CustomPainter {
         double dashLength = pathLength * 0.15; 
         
         Paint particlePaint = Paint()
-          ..color = categoryColor.withOpacity(0.9) 
+          ..color = categoryColor.withValues(alpha: 0.9) 
           ..style = PaintingStyle.stroke
           ..strokeWidth = catHeight * 0.3 
           ..strokeCap = StrokeCap.round

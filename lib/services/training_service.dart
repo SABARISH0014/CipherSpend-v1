@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'db_service.dart';
 import '../utils/constants.dart';
@@ -33,7 +34,7 @@ class TrainingService {
       whereArgs: [hash],
     );
 
-    print("AI Feedback Received: Transaction $hash is now $newCategory");
+    debugPrint("AI Feedback Received: Transaction $hash is now $newCategory");
   }
 
   /// [NEW] Update the merchant name (TARGET_NODE) in the DB
@@ -47,6 +48,6 @@ class TrainingService {
       whereArgs: [hash],
     );
 
-    print("Manual Override: Merchant updated to $newMerchant");
+    debugPrint("Manual Override: Merchant updated to $newMerchant");
   }
 }

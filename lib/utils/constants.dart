@@ -50,7 +50,7 @@ class Constants {
         border: Border.all(color: Colors.white10, width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withValues(alpha: 0.4),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),

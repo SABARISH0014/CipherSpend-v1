@@ -1,5 +1,5 @@
 import 'package:flutter/services.dart';
-
+import 'package:flutter/foundation.dart';
 class SmsBridge {
   static const MethodChannel _methodChannel =
       MethodChannel('com.example.cipherspend/sms');
@@ -17,7 +17,7 @@ class SmsBridge {
           await _methodChannel.invokeMethod('readSmsHistory', arguments);
       return result;
     } on PlatformException catch (e) {
-      print("Native Bridge Error (History): $e");
+      debugPrint("Native Bridge Error (History): $e");
       return [];
     }
   }
@@ -29,7 +29,7 @@ class SmsBridge {
           await _methodChannel.invokeMethod('getAndClearBackgroundCache');
       return result;
     } on PlatformException catch (e) {
-      print("Native Bridge Error (Cache): $e");
+      debugPrint("Native Bridge Error (Cache): $e");
       return null;
     }
   }

@@ -76,11 +76,11 @@ class _StartupScreenState extends State<StartupScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.terminal_rounded, size: 14, color: Constants.colorPrimary),
+                const Icon(Icons.terminal_rounded, size: 14, color: Constants.colorPrimary),
                 const SizedBox(width: 8),
                 Text(
                   widget.isSuccessMode ? "ACCESS GRANTED" : "SYS_BOOT_SEQ", 
-                  style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10, letterSpacing: 4, fontWeight: FontWeight.bold)
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10, letterSpacing: 4, fontWeight: FontWeight.bold)
                 ),
               ],
             ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2),
@@ -91,17 +91,17 @@ class _StartupScreenState extends State<StartupScreen> {
             Container(
               padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
-                color: Constants.colorSurface.withOpacity(0.8),
+                color: Constants.colorSurface.withValues(alpha: 0.8),
                 shape: BoxShape.circle,
-                border: Border.all(color: Constants.colorPrimary.withOpacity(0.5), width: 2),
+                border: Border.all(color: Constants.colorPrimary.withValues(alpha: 0.5), width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: Constants.colorPrimary.withOpacity(widget.isSuccessMode ? 0.3 : 0.15),
+                    color: Constants.colorPrimary.withValues(alpha: widget.isSuccessMode ? 0.3 : 0.15),
                     blurRadius: widget.isSuccessMode ? 60 : 40,
                     spreadRadius: widget.isSuccessMode ? 12 : 8,
                   ),
                   BoxShadow(
-                    color: Constants.colorPrimary.withOpacity(0.4),
+                    color: Constants.colorPrimary.withValues(alpha: 0.4),
                     blurRadius: 10,
                     spreadRadius: 2,
                   )
@@ -116,7 +116,7 @@ class _StartupScreenState extends State<StartupScreen> {
             .animate(target: widget.isSuccessMode ? 1 : 0)
             .scale(end: const Offset(1.15, 1.15), duration: 600.ms, curve: Curves.easeOutBack)
             .then()
-            .shimmer(duration: 1200.ms, color: Colors.white.withOpacity(0.5)),
+            .shimmer(duration: 1200.ms, color: Colors.white.withValues(alpha: 0.5)),
             
             const SizedBox(height: 48),
             
@@ -128,7 +128,7 @@ class _StartupScreenState extends State<StartupScreen> {
                 fontSize: 24,
                 color: Colors.white,
                 shadows: [
-                  Shadow(color: Constants.colorPrimary.withOpacity(0.5), blurRadius: 10)
+                  Shadow(color: Constants.colorPrimary.withValues(alpha: 0.5), blurRadius: 10)
                 ]
               ),
             )
@@ -164,7 +164,7 @@ class _StartupScreenState extends State<StartupScreen> {
                   decoration: BoxDecoration(
                     color: Constants.colorPrimary,
                     borderRadius: BorderRadius.circular(2),
-                    boxShadow: [
+                    boxShadow: const [
                       BoxShadow(color: Constants.colorPrimary, blurRadius: 6, spreadRadius: 1)
                     ]
                   ),

@@ -95,7 +95,7 @@ class ParserService {
         }
       }
     } catch (e) {
-      print("Error processing custom rules: $e");
+      debugPrint("Error processing custom rules: $e");
     }
     // --- END CUSTOM RULES CHECK ---
 
@@ -130,7 +130,7 @@ class ParserService {
     try {
       category = AIService().predictCategory(cleanBody);
     } catch (e) {
-      print("AI Prediction failed: $e");
+      debugPrint("AI Prediction failed: $e");
     }
 
     String lowerCat = category.toLowerCase();
@@ -217,14 +217,22 @@ class ParserService {
     return "Unknown Merchant";
   }
 
-  @visibleForTesting
+@visibleForTesting
   static String determineType(String body) {
-    if (_upiRegex.hasMatch(body)) return "UPI";
+    if (_upiRegex.hasMatch(body)) {
+      return "UPI";
+    }
+    
     if (body.contains("card") ||
         body.contains("visa") ||
-        body.contains("mastercard"))
+        body.contains("mastercard")) {
       return "Card";
-    if (body.contains("atm") || body.contains("cash")) return "Cash";
+    }
+    
+    if (body.contains("atm") || body.contains("cash")) {
+      return "Cash";
+    }
+    
     return "Bank Transfer";
   }
 

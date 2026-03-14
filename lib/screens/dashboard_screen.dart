@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,9 +26,9 @@ import 'profile_edit_screen.dart';
 Future<void> requestSmsPermissions() async {
   Map<Permission, PermissionStatus> statuses = await [Permission.sms].request();
   if (statuses[Permission.sms]!.isGranted) {
-    print("✅ SMS Permission Granted");
+    debugPrint("✅ SMS Permission Granted");
   } else {
-    print("❌ SMS Permission Denied");
+    debugPrint("❌ SMS Permission Denied");
   }
 }
 
@@ -222,7 +221,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         }
       }
     } catch (e) {
-      print("Smart Prompt check failed: $e");
+      debugPrint("Smart Prompt check failed: $e");
     }
   }
 
@@ -312,7 +311,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                             timestamp: DateTime.now().millisecondsSinceEpoch,
                           );
                           await _smsService.saveTransaction(txn);
-                          if (mounted) Navigator.pop(ctx);
+                          if (ctx.mounted) Navigator.pop(ctx);
                           _loadData(); 
                         }
                       },
@@ -337,7 +336,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           String dedupeRule = prefs.getString('dedupe_rule') ?? 'auto_drop';
 
           if (dedupeRule == 'auto_drop') {
-            print("🛡️ SILENTLY DROPPED DUPLICATE: ₹${txn.amount} from ${txn.sender}");
+            debugPrint("🛡️ SILENTLY DROPPED DUPLICATE: ₹${txn.amount} from ${txn.sender}");
           } else {
             if (mounted) _showDuplicateDialog(txn);
           }
@@ -376,7 +375,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           child: Container(
             padding: const EdgeInsets.all(24),
             decoration: Constants.glassDecoration.copyWith(
-              border: Border.all(color: Colors.orange.withOpacity(0.3)),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -465,9 +464,9 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: (exceedsNextMonth ? Colors.orange : Constants.colorPrimary).withOpacity(0.1),
+                    color: (exceedsNextMonth ? Colors.orange : Constants.colorPrimary).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: (exceedsNextMonth ? Colors.orange : Constants.colorPrimary).withOpacity(0.3)),
+                    border: Border.all(color: (exceedsNextMonth ? Colors.orange : Constants.colorPrimary).withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
@@ -499,7 +498,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       // TWEAKED: Slightly thicker border and added a subtle shadow for depth
       side: const BorderSide(color: Constants.colorAccent, width: 1.5),
       elevation: 4,
-      shadowColor: Constants.colorAccent.withOpacity(0.3),
+      shadowColor: Constants.colorAccent.withValues(alpha: 0.3),
       
       // TWEAKED: Changed radius from 8 to 12 to match the dialog's other elements
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -571,7 +570,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: statusColor.withOpacity(0.15),
+                    color: statusColor.withValues(alpha: 0.15),
                     blurRadius: 24,
                     spreadRadius: -2,
                     offset: const Offset(0, 8),
@@ -585,16 +584,16 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(24),
-              color: Constants.colorSurface.withOpacity(0.8),
+              color: Constants.colorSurface.withValues(alpha: 0.8),
               border: Border.all(
-                color: Colors.white.withOpacity(0.08),
+                color: Colors.white.withValues(alpha: 0.08),
                 width: 1.5,
               ),
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.white.withOpacity(0.05),
+                  Colors.white.withValues(alpha: 0.05),
                   Colors.transparent,
                 ],
               ),
@@ -612,7 +611,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                         Text(
                           "FORECAST",
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 1.2,
@@ -623,9 +622,9 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.15),
+                        color: statusColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: statusColor.withOpacity(0.3)),
+                        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         isOverBudget ? "CRITICAL" : "ON TRACK",
@@ -667,7 +666,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text("BUDGET", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 1)),
+                        Text("BUDGET", style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 1)),
                         const SizedBox(height: 2),
                         Text("₹${budget.toStringAsFixed(0)}", style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
                       ],
@@ -687,7 +686,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                           decoration: BoxDecoration(
                             color: Colors.black45,
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: Colors.white.withOpacity(0.05)),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                           ),
                         ),
                         TweenAnimationBuilder<double>(
@@ -703,7 +702,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                                 borderRadius: BorderRadius.circular(4),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: statusColor.withOpacity(0.8),
+                                    color: statusColor.withValues(alpha: 0.8),
                                     blurRadius: 10,
                                     spreadRadius: 1,
                                   ),
@@ -727,7 +726,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                     ),
                     Text(
                       "₹${(budget - spent).abs().toStringAsFixed(0)} ${isOverBudget ? 'Over' : 'Left'}",
-                      style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11, fontWeight: FontWeight.w500),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 11, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -741,11 +740,11 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                         decoration: BoxDecoration(
                           color: Colors.black26,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white.withOpacity(0.05)),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.pie_chart_outline, color: Constants.colorPrimary.withOpacity(0.8), size: 14),
+                            Icon(Icons.pie_chart_outline, color: Constants.colorPrimary.withValues(alpha: 0.8), size: 14),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -765,9 +764,9 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: Constants.colorPrimary.withOpacity(0.1),
+                          color: Constants.colorPrimary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Constants.colorPrimary.withOpacity(0.3)),
+                          border: Border.all(color: Constants.colorPrimary.withValues(alpha: 0.3)),
                         ),
                         child: const Icon(Icons.arrow_forward_ios_rounded, color: Constants.colorPrimary, size: 12),
                       ),
@@ -796,9 +795,9 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
+              color: Colors.white.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.1))
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1))
             ),
             child: Text(monthName, style: Constants.headerStyle.copyWith(fontSize: 14, letterSpacing: 1)),
           ),
@@ -833,7 +832,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                 Text(
                   "DECRYPTED LEDGER",
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                     fontSize: 10,
                     letterSpacing: 2,
                     fontWeight: FontWeight.bold,
@@ -878,14 +877,14 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                 width: 100, height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: Constants.colorPrimary.withOpacity(0.2), width: 2),
+                  border: Border.all(color: Constants.colorPrimary.withValues(alpha: 0.2), width: 2),
                 ),
               ).animate(onPlay: (c) => c.repeat()).scale(begin: const Offset(0.5, 0.5), end: const Offset(1.5, 1.5), duration: 2.seconds).fade(end: 0),
-              Icon(Icons.radar_rounded, size: 50, color: Constants.colorPrimary.withOpacity(0.5)),
+              Icon(Icons.radar_rounded, size: 50, color: Constants.colorPrimary.withValues(alpha: 0.5)),
             ],
           ),
           const SizedBox(height: 24),
-          Text("LEDGER EMPTY", style: Constants.headerStyle.copyWith(color: Constants.colorPrimary.withOpacity(0.8), letterSpacing: 4, fontSize: 14)),
+          Text("LEDGER EMPTY", style: Constants.headerStyle.copyWith(color: Constants.colorPrimary.withValues(alpha: 0.8), letterSpacing: 4, fontSize: 14)),
           const SizedBox(height: 8),
           Text("No offline financial data\nintercepted for this cycle.", textAlign: TextAlign.center, style: Constants.subHeaderStyle.copyWith(fontSize: 11)),
         ],
@@ -905,7 +904,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         // Adds a very subtle ambient glow behind the entire card based on its category
         boxShadow: [
           BoxShadow(
-            color: catColor.withOpacity(0.03),
+            color: catColor.withValues(alpha: 0.03),
             blurRadius: 12,
             spreadRadius: 2,
             offset: const Offset(0, 4),
@@ -920,15 +919,15 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           padding: const EdgeInsets.only(right: 24),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Constants.colorError.withOpacity(0.5), width: 1.5),
+            border: Border.all(color: Constants.colorError.withValues(alpha: 0.5), width: 1.5),
             // Upgraded purge background with a tech-warning gradient
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [
                 Colors.transparent,
-                Constants.colorError.withOpacity(0.05),
-                Constants.colorError.withOpacity(0.25),
+                Constants.colorError.withValues(alpha: 0.05),
+                Constants.colorError.withValues(alpha: 0.25),
               ],
             ),
           ),
@@ -941,7 +940,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                   fontWeight: FontWeight.w900, 
                   letterSpacing: 3, 
                   fontSize: 12,
-                  shadows: [Shadow(color: Constants.colorError.withOpacity(0.5), blurRadius: 4)]
+                  shadows: [Shadow(color: Constants.colorError.withValues(alpha: 0.5), blurRadius: 4)]
                 )
               ),
               const SizedBox(width: 12),
@@ -968,15 +967,15 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           child: Container(
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              color: Constants.colorSurface.withOpacity(0.6), // Glassier background
+              color: Constants.colorSurface.withValues(alpha: 0.6), // Glassier background
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.08), width: 1), 
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1), 
               // Soft gradient fading from the category color into the dark surface
               gradient: LinearGradient(
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
                 colors: [
-                  catColor.withOpacity(0.1),
+                  catColor.withValues(alpha: 0.1),
                   Colors.transparent,
                 ],
               ),
@@ -991,7 +990,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                       color: catColor,
                       boxShadow: [
                         BoxShadow(
-                          color: catColor.withOpacity(0.8),
+                          color: catColor.withValues(alpha: 0.8),
                           blurRadius: 8,
                           spreadRadius: 1,
                         )
@@ -1005,9 +1004,9 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: catColor.withOpacity(0.08),
+                      color: catColor.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: catColor.withOpacity(0.2), width: 1),
+                      border: Border.all(color: catColor.withValues(alpha: 0.2), width: 1),
                     ),
                     child: Icon(_getCategoryIcon(txn.category), color: catColor, size: 18),
                   ),
@@ -1038,20 +1037,20 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: catColor.withOpacity(0.1),
+                                  color: catColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(
                                   txn.category.toUpperCase(), 
-                                  style: TextStyle(color: catColor.withOpacity(0.9), fontSize: 8, fontWeight: FontWeight.w800, letterSpacing: 1)
+                                  style: TextStyle(color: catColor.withValues(alpha: 0.9), fontSize: 8, fontWeight: FontWeight.w800, letterSpacing: 1)
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Icon(Icons.access_time_rounded, color: Colors.white.withOpacity(0.3), size: 10),
+                              Icon(Icons.access_time_rounded, color: Colors.white.withValues(alpha: 0.3), size: 10),
                               const SizedBox(width: 4),
                               Text(
                                 DateFormat('dd MMM, HH:mm').format(date), 
-                                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10, fontFamily: 'Courier') 
+                                style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10, fontFamily: 'Courier') 
                               ),
                             ],
                           ),
@@ -1071,7 +1070,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                         fontWeight: FontWeight.w800, 
                         letterSpacing: -0.5,
                         shadows: [
-                          Shadow(color: Colors.black.withOpacity(0.5), blurRadius: 4, offset: const Offset(0, 2))
+                          Shadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 4, offset: const Offset(0, 2))
                         ]
                       )
                     ),
@@ -1158,7 +1157,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
             color: Constants.colorSurface,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Colors.white.withOpacity(0.1)),
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
             ),
             offset: const Offset(0, 50),
             onSelected: (value) async {
@@ -1219,7 +1218,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Constants.colorPrimary.withOpacity(_isFabPressed ? 0.3 : 0.6),
+                    color: Constants.colorPrimary.withValues(alpha: _isFabPressed ? 0.3 : 0.6),
                     blurRadius: _isFabPressed ? 10 : 20,
                     spreadRadius: _isFabPressed ? 2 : 5,
                   )

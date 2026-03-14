@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'db_service.dart';
@@ -89,7 +90,7 @@ class SmsService {
         conflictAlgorithm: ConflictAlgorithm.ignore,
       );
     } catch (e) {
-      print("❌ Error saving transaction: $e");
+      debugPrint("❌ Error saving transaction: $e");
     }
   }
 
@@ -128,7 +129,7 @@ class SmsService {
           List<dynamic> cachedMsgs = jsonDecode(cachedJson);
           messages.addAll(cachedMsgs);
         } catch (e) {
-          print("Error decoding cache: $e");
+          debugPrint("Error decoding cache: $e");
         }
       }
 
@@ -194,7 +195,7 @@ class SmsService {
 
       await prefs.setInt('last_sync_timestamp', highestTimestamp);
     } catch (e) {
-      print("❌ Silent Sync Error: $e");
+      debugPrint("❌ Silent Sync Error: $e");
     }
   }
 
@@ -277,7 +278,7 @@ class SmsService {
       if (onProgress != null) onProgress(messages.length, messages.length);
       return addedCount;
     } catch (e) {
-      print("❌ Sync History Error: $e");
+      debugPrint("❌ Sync History Error: $e");
       return 0;
     }
   }

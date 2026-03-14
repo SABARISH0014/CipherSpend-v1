@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -238,7 +237,7 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
                               backgroundColor: Constants.colorPrimary,
                               foregroundColor: Colors.black,
                               elevation: 4,
-                              shadowColor: Constants.colorPrimary.withOpacity(0.3),
+                              shadowColor: Constants.colorPrimary.withValues(alpha: 0.3),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
                             onPressed: () {
@@ -389,7 +388,7 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: catColor.withOpacity(0.03),
+            color: catColor.withValues(alpha: 0.03),
             blurRadius: 12,
             spreadRadius: 2,
             offset: const Offset(0, 4),
@@ -408,14 +407,14 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
         child: Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: Constants.colorSurface.withOpacity(0.6), 
+            color: Constants.colorSurface.withValues(alpha: 0.6), 
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.08), width: 1), 
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1), 
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [
-                catColor.withOpacity(0.1),
+                catColor.withValues(alpha: 0.1),
                 Colors.transparent,
               ],
             ),
@@ -430,7 +429,7 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
                     color: catColor,
                     boxShadow: [
                       BoxShadow(
-                        color: catColor.withOpacity(0.8),
+                        color: catColor.withValues(alpha: 0.8),
                         blurRadius: 8,
                         spreadRadius: 1,
                       )
@@ -443,9 +442,9 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: catColor.withOpacity(0.08),
+                    color: catColor.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: catColor.withOpacity(0.2), width: 1),
+                    border: Border.all(color: catColor.withValues(alpha: 0.2), width: 1),
                   ),
                   child: Icon(_getCategoryIcon(txn.category), color: catColor, size: 18),
                 ),
@@ -476,20 +475,20 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: catColor.withOpacity(0.1),
+                                color: catColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 txn.category.toUpperCase(), 
-                                style: TextStyle(color: catColor.withOpacity(0.9), fontSize: 8, fontWeight: FontWeight.w800, letterSpacing: 1)
+                                style: TextStyle(color: catColor.withValues(alpha: 0.9), fontSize: 8, fontWeight: FontWeight.w800, letterSpacing: 1)
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Icon(Icons.access_time_rounded, color: Colors.white.withOpacity(0.3), size: 10),
+                            Icon(Icons.access_time_rounded, color: Colors.white.withValues(alpha: 0.3), size: 10),
                             const SizedBox(width: 4),
                             Text(
                               DateFormat('dd MMM, HH:mm').format(date), 
-                              style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10, fontFamily: 'Courier') 
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 10, fontFamily: 'Courier') 
                             ),
                           ],
                         ),
@@ -509,7 +508,7 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
                       fontWeight: FontWeight.w800, 
                       letterSpacing: -0.5,
                       shadows: [
-                        Shadow(color: Colors.black.withOpacity(0.5), blurRadius: 4, offset: const Offset(0, 2))
+                        Shadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 4, offset: const Offset(0, 2))
                       ]
                     )
                   ),
@@ -535,14 +534,14 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
                 width: 100, height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: Constants.colorPrimary.withOpacity(0.2), width: 2),
+                  border: Border.all(color: Constants.colorPrimary.withValues(alpha: 0.2), width: 2),
                 ),
               ).animate(onPlay: (c) => c.repeat()).scale(begin: const Offset(0.5, 0.5), end: const Offset(1.5, 1.5), duration: 2.seconds).fade(end: 0),
-              Icon(Icons.search_off_rounded, size: 50, color: Constants.colorPrimary.withOpacity(0.5)),
+              Icon(Icons.search_off_rounded, size: 50, color: Constants.colorPrimary.withValues(alpha: 0.5)),
             ],
           ),
           const SizedBox(height: 24),
-          Text("NO MATCHES FOUND", style: Constants.headerStyle.copyWith(color: Constants.colorPrimary.withOpacity(0.8), letterSpacing: 4, fontSize: 14)),
+          Text("NO MATCHES FOUND", style: Constants.headerStyle.copyWith(color: Constants.colorPrimary.withValues(alpha: 0.8), letterSpacing: 4, fontSize: 14)),
           const SizedBox(height: 8),
           Text("Adjust your filters or query\nto decrypt more records.", textAlign: TextAlign.center, style: Constants.subHeaderStyle.copyWith(fontSize: 11)),
         ],
@@ -592,7 +591,7 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
                   child: Container(
                     decoration: Constants.glassDecoration.copyWith(
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                     ),
                     child: TextField(
                       controller: _searchController,
@@ -614,7 +613,7 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
                     Container(
                       decoration: Constants.glassDecoration.copyWith(
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                       ),
                       child: IconButton(
                         padding: const EdgeInsets.all(14),

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -320,9 +319,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
         child: Container(
           padding: const EdgeInsets.all(28),
           decoration: Constants.glassDecoration.copyWith(
-            border: Border.all(color: Constants.colorAccent.withOpacity(0.5), width: 1.5),
+            border: Border.all(color: Constants.colorAccent.withValues(alpha: 0.5), width: 1.5),
             boxShadow: [
-              BoxShadow(color: Constants.colorAccent.withOpacity(0.15), blurRadius: 30, spreadRadius: 5)
+              BoxShadow(color: Constants.colorAccent.withValues(alpha: 0.15), blurRadius: 30, spreadRadius: 5)
             ]
           ),
           child: Column(
@@ -350,7 +349,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: Colors.white.withOpacity(0.1)),
+                          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                         ),
                       ),
                       onPressed: onSkip,
@@ -368,7 +367,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                         backgroundColor: Constants.colorAccent,
                         foregroundColor: Colors.black,
                         elevation: 8,
-                        shadowColor: Constants.colorAccent.withOpacity(0.4),
+                        shadowColor: Constants.colorAccent.withValues(alpha: 0.4),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       onPressed: onAllow,
@@ -396,7 +395,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
         Text(
           title,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.5),
+            color: Colors.white.withValues(alpha: 0.5),
             fontSize: 10,
             letterSpacing: 2,
             fontWeight: FontWeight.bold,
@@ -417,11 +416,11 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
       fillColor: Colors.black26,
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16), 
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.05), width: 1)
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05), width: 1)
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16), 
-        borderSide: BorderSide(color: Constants.colorPrimary.withOpacity(0.5), width: 1.5)
+        borderSide: BorderSide(color: Constants.colorPrimary.withValues(alpha: 0.5), width: 1.5)
       ),
     );
   }
@@ -458,17 +457,17 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                   child: Container(
                     padding: const EdgeInsets.all(20), // Reduced from 28
                     decoration: BoxDecoration(
-                      color: Constants.colorSurface.withOpacity(0.8),
+                      color: Constants.colorSurface.withValues(alpha: 0.8),
                       shape: BoxShape.circle,
-                      border: Border.all(color: Constants.colorPrimary.withOpacity(0.5), width: 2),
+                      border: Border.all(color: Constants.colorPrimary.withValues(alpha: 0.5), width: 2),
                       boxShadow: [
                         BoxShadow(
-                          color: Constants.colorPrimary.withOpacity(0.15), 
+                          color: Constants.colorPrimary.withValues(alpha: 0.15), 
                           blurRadius: 30, // Reduced from 40
                           spreadRadius: 6  // Reduced from 8
                         ),
                         BoxShadow(
-                          color: Constants.colorPrimary.withOpacity(0.3), 
+                          color: Constants.colorPrimary.withValues(alpha: 0.3), 
                           blurRadius: 8, 
                           spreadRadius: 2
                         )
@@ -502,12 +501,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                   child: Container(
                     clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
-                      color: Constants.colorSurface.withOpacity(0.6),
+                      color: Constants.colorSurface.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
                       boxShadow: [
                         BoxShadow(
-                          color: _isBiometricRegistered ? Colors.green.withOpacity(0.05) : Constants.colorAccent.withOpacity(0.05),
+                          color: _isBiometricRegistered ? Colors.green.withValues(alpha: 0.05) : Constants.colorAccent.withValues(alpha: 0.05),
                           blurRadius: 12,
                           spreadRadius: 2,
                         ),
@@ -516,7 +515,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                         colors: [
-                          _isBiometricRegistered ? Colors.green.withOpacity(0.1) : Constants.colorAccent.withOpacity(0.1),
+                          _isBiometricRegistered ? Colors.green.withValues(alpha: 0.1) : Constants.colorAccent.withValues(alpha: 0.1),
                           Colors.transparent,
                         ],
                       ),
@@ -531,7 +530,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                               color: _isBiometricRegistered ? Colors.green : Constants.colorAccent,
                               boxShadow: [
                                 BoxShadow(
-                                  color: _isBiometricRegistered ? Colors.green.withOpacity(0.8) : Constants.colorAccent.withOpacity(0.8),
+                                  color: _isBiometricRegistered ? Colors.green.withValues(alpha: 0.8) : Constants.colorAccent.withValues(alpha: 0.8),
                                   blurRadius: 8,
                                   spreadRadius: 1,
                                 )
@@ -546,9 +545,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                                   Container(
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
-                                      color: _isBiometricRegistered ? Colors.green.withOpacity(0.1) : Constants.colorAccent.withOpacity(0.1),
+                                      color: _isBiometricRegistered ? Colors.green.withValues(alpha: 0.1) : Constants.colorAccent.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: _isBiometricRegistered ? Colors.green.withOpacity(0.3) : Constants.colorAccent.withOpacity(0.3), width: 1),
+                                      border: Border.all(color: _isBiometricRegistered ? Colors.green.withValues(alpha: 0.3) : Constants.colorAccent.withValues(alpha: 0.3), width: 1),
                                     ),
                                     child: Icon(Icons.fingerprint_rounded, color: _isBiometricRegistered ? Colors.green : Constants.colorAccent, size: 24),
                                   ),
@@ -646,7 +645,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
                       backgroundColor: Constants.colorPrimary,
                       foregroundColor: Colors.black,
                       elevation: 8,
-                      shadowColor: Constants.colorPrimary.withOpacity(0.4),
+                      shadowColor: Constants.colorPrimary.withValues(alpha: 0.4),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                     onPressed: _completeSetup,

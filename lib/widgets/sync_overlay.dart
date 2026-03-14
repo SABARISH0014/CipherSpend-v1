@@ -28,7 +28,7 @@ class SyncOverlay extends StatelessWidget {
           decoration: BoxDecoration(
             color: Constants.colorSurface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Constants.colorPrimary.withOpacity(0.5)),
+            border: Border.all(color: Constants.colorPrimary.withValues(alpha: 0.5)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,

@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
@@ -29,13 +29,13 @@ class AIService {
           rawLabels.length, (index) => rawLabels[index.toString()] ?? "Others");
 
       // Verify the dynamic shapes
-      print("✅ AI Engine Loaded.");
-      print(
+      debugPrint("✅ AI Engine Loaded.");
+      debugPrint(
           "🔍 Model Input expects: ${_interpreter!.getInputTensors().first.shape}");
-      print(
+      debugPrint(
           "🔍 Model Output gives: ${_interpreter!.getOutputTensors().first.shape}");
     } catch (e) {
-      print("❌ AI Engine Error: $e");
+      debugPrint("❌ AI Engine Error: $e");
     }
   }
 
@@ -68,7 +68,7 @@ class AIService {
     try {
       _interpreter!.run(input, output);
     } catch (e) {
-      print("❌ Inference Error: $e");
+      debugPrint("❌ Inference Error: $e");
       return "Error";
     }
 
@@ -87,13 +87,13 @@ class AIService {
 
     // [NEW] Safety Net: Prevent out-of-bounds crashes
     if (bestIndex >= _labels!.length) {
-      print(
+      debugPrint(
           "⚠️ AI predicted unknown index $bestIndex. Defaulting to Uncategorized.");
       return "Uncategorized";
     }
 
     String result = _labels![bestIndex];
-    print(
+    debugPrint(
         "🤖 AI Categorized as: $result (Prob: ${maxProb.toStringAsFixed(2)})");
     return result;
   }

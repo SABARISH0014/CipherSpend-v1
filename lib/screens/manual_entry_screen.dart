@@ -134,7 +134,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
         Text(
           title,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.5),
+            color: Colors.white.withValues(alpha: 0.5),
             fontSize: 10,
             letterSpacing: 2,
             fontWeight: FontWeight.bold,
@@ -154,15 +154,15 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
       fillColor: Colors.black26,
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16), 
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.05), width: 1)
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05), width: 1)
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16), 
-        borderSide: BorderSide(color: Constants.colorPrimary.withOpacity(0.5), width: 1.5)
+        borderSide: BorderSide(color: Constants.colorPrimary.withValues(alpha: 0.5), width: 1.5)
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16), 
-        borderSide: BorderSide(color: Constants.colorError.withOpacity(0.5), width: 1.5)
+        borderSide: BorderSide(color: Constants.colorError.withValues(alpha: 0.5), width: 1.5)
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16), 
@@ -257,7 +257,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                           flex: 5,
                           child: DropdownButtonFormField<String>(
                             isExpanded: true, // [FIX] Prevents overflow by shrinking long text
-                            value: _selectedCategory,
+                            initialValue: _selectedCategory,
                             dropdownColor: Constants.colorSurface,
                             style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
                             decoration: _buildInputDecoration("Category", Icons.folder_open_rounded),
@@ -278,7 +278,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                           flex: 5, // Balanced the flex to give "Bank Transfer" more room
                           child: DropdownButtonFormField<String>(
                             isExpanded: true, // [FIX] Prevents overflow
-                            value: _selectedType,
+                            initialValue: _selectedType,
                             dropdownColor: Constants.colorSurface,
                             style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
                             decoration: _buildInputDecoration("Vector", Icons.account_tree_rounded),
@@ -308,7 +308,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                         decoration: BoxDecoration(
                           color: Colors.black26,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.white.withOpacity(0.05), width: 1),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.05), width: 1),
                         ),
                         child: Row(
                           children: [
@@ -317,9 +317,9 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
+                               const Text(
                                   "Transaction Date",
-                                  style: const TextStyle(color: Colors.white38, fontSize: 12),
+                                  style: TextStyle(color: Colors.white38, fontSize: 12),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
@@ -346,7 +346,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
                           backgroundColor: Constants.colorPrimary,
                           foregroundColor: Colors.black,
                           elevation: 8,
-                          shadowColor: Constants.colorPrimary.withOpacity(0.4),
+                          shadowColor: Constants.colorPrimary.withValues(alpha: 0.4),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),

@@ -47,14 +47,14 @@ class _AppNotificationsScreenState extends State<AppNotificationsScreen> {
                 width: 100, height: 100,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: Constants.colorAccent.withOpacity(0.2), width: 2),
+                  border: Border.all(color: Constants.colorAccent.withValues(alpha: 0.2), width: 2),
                 ),
               ).animate(onPlay: (c) => c.repeat()).scale(begin: const Offset(0.5, 0.5), end: const Offset(1.5, 1.5), duration: 2.seconds).fade(end: 0),
-              Icon(Icons.shield_outlined, size: 50, color: Constants.colorAccent.withOpacity(0.5)),
+              Icon(Icons.shield_outlined, size: 50, color: Constants.colorAccent.withValues(alpha: 0.5)),
             ],
           ),
           const SizedBox(height: 24),
-          Text("SYSTEM NOMINAL", style: Constants.headerStyle.copyWith(color: Constants.colorAccent.withOpacity(0.8), letterSpacing: 4, fontSize: 14)),
+          Text("SYSTEM NOMINAL", style: Constants.headerStyle.copyWith(color: Constants.colorAccent.withValues(alpha: 0.8), letterSpacing: 4, fontSize: 14)),
           const SizedBox(height: 8),
           Text("No active anomalies or budget\nbreaches detected.", textAlign: TextAlign.center, style: Constants.subHeaderStyle.copyWith(fontSize: 11)),
         ],
@@ -96,7 +96,7 @@ class _AppNotificationsScreenState extends State<AppNotificationsScreen> {
                 Text(
                   "SYSTEM LOGS",
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                     fontSize: 10,
                     letterSpacing: 2,
                     fontWeight: FontWeight.bold,
@@ -140,7 +140,7 @@ class _AppNotificationsScreenState extends State<AppNotificationsScreen> {
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: glowColor.withOpacity(0.03),
+                                  color: glowColor.withValues(alpha: 0.03),
                                   blurRadius: 12,
                                   spreadRadius: 2,
                                   offset: const Offset(0, 4),
@@ -167,14 +167,14 @@ class _AppNotificationsScreenState extends State<AppNotificationsScreen> {
                                 padding: const EdgeInsets.only(right: 24),
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: Constants.colorError.withOpacity(0.5), width: 1.5),
+                                  border: Border.all(color: Constants.colorError.withValues(alpha: 0.5), width: 1.5),
                                   gradient: LinearGradient(
                                     begin: Alignment.centerLeft,
                                     end: Alignment.centerRight,
                                     colors: [
                                       Colors.transparent,
-                                      Constants.colorError.withOpacity(0.05),
-                                      Constants.colorError.withOpacity(0.25),
+                                      Constants.colorError.withValues(alpha: 0.05),
+                                      Constants.colorError.withValues(alpha: 0.25),
                                     ],
                                   ),
                                 ),
@@ -187,7 +187,7 @@ class _AppNotificationsScreenState extends State<AppNotificationsScreen> {
                                         fontWeight: FontWeight.w900, 
                                         letterSpacing: 3, 
                                         fontSize: 12,
-                                        shadows: [Shadow(color: Constants.colorError.withOpacity(0.5), blurRadius: 4)]
+                                        shadows: [Shadow(color: Constants.colorError.withValues(alpha: 0.5), blurRadius: 4)]
                                       )
                                     ),
                                     const SizedBox(width: 12),
@@ -198,14 +198,14 @@ class _AppNotificationsScreenState extends State<AppNotificationsScreen> {
                               child: Container(
                                 clipBehavior: Clip.antiAlias,
                                 decoration: BoxDecoration(
-                                  color: Constants.colorSurface.withOpacity(0.6),
+                                  color: Constants.colorSurface.withValues(alpha: 0.6),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+                                  border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
                                   gradient: LinearGradient(
                                     begin: Alignment.centerLeft,
                                     end: Alignment.centerRight,
                                     colors: [
-                                      glowColor.withOpacity(0.1),
+                                      glowColor.withValues(alpha: 0.1),
                                       Colors.transparent,
                                     ],
                                   ),
@@ -220,7 +220,7 @@ class _AppNotificationsScreenState extends State<AppNotificationsScreen> {
                                           color: glowColor,
                                           boxShadow: [
                                             BoxShadow(
-                                              color: glowColor.withOpacity(0.8),
+                                              color: glowColor.withValues(alpha: 0.8),
                                               blurRadius: 8,
                                               spreadRadius: 1,
                                             )
@@ -233,9 +233,9 @@ class _AppNotificationsScreenState extends State<AppNotificationsScreen> {
                                       Container(
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          color: glowColor.withOpacity(0.1),
+                                          color: glowColor.withValues(alpha: 0.1),
                                           shape: BoxShape.circle,
-                                          border: Border.all(color: glowColor.withOpacity(0.3), width: 1),
+                                          border: Border.all(color: glowColor.withValues(alpha: 0.3), width: 1),
                                         ),
                                         child: Icon(alertIcon, color: glowColor, size: 20),
                                       ),
@@ -271,11 +271,11 @@ class _AppNotificationsScreenState extends State<AppNotificationsScreen> {
                                               const SizedBox(height: 10),
                                               Row(
                                                 children: [
-                                                  Icon(Icons.access_time_rounded, color: Colors.white.withOpacity(0.3), size: 10),
+                                                  Icon(Icons.access_time_rounded, color: Colors.white.withValues(alpha: 0.3), size: 10),
                                                   const SizedBox(width: 4),
                                                   Text(
                                                     DateFormat('MMM dd, hh:mm a').format(date),
-                                                    style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10, fontFamily: 'Courier', fontWeight: FontWeight.bold),
+                                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.4), fontSize: 10, fontFamily: 'Courier', fontWeight: FontWeight.bold),
                                                   ),
                                                 ],
                                               )

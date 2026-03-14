@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,7 +7,6 @@ import '../services/auth_service.dart';
 import '../services/db_service.dart';
 import '../utils/constants.dart';
 import 'verification_screen.dart';
-import 'debug_parser_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -133,7 +131,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Text(
           title,
           style: TextStyle(
-            color: color == Constants.colorAccent ? Colors.white.withOpacity(0.5) : color,
+            color: color == Constants.colorAccent ? Colors.white.withValues(alpha: 0.5) : color,
             fontSize: 10,
             letterSpacing: 2,
             fontWeight: FontWeight.bold,
@@ -158,7 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.03),
+            color: color.withValues(alpha: 0.03),
             blurRadius: 12,
             spreadRadius: 2,
             offset: const Offset(0, 4),
@@ -171,14 +169,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Container(
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: Constants.colorSurface.withOpacity(0.6),
+            color: Constants.colorSurface.withValues(alpha: 0.6),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [
-                color.withOpacity(0.1),
+                color.withValues(alpha: 0.1),
                 Colors.transparent,
               ],
             ),
@@ -192,7 +190,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   decoration: BoxDecoration(
                     color: color,
                     boxShadow: [
-                      BoxShadow(color: color.withOpacity(0.8), blurRadius: 8, spreadRadius: 1)
+                      BoxShadow(color: color.withValues(alpha: 0.8), blurRadius: 8, spreadRadius: 1)
                     ]
                   ),
                 ),
@@ -202,9 +200,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     leading: Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: color.withOpacity(0.1),
+                        color: color.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: color.withOpacity(0.2), width: 1),
+                        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
                       ),
                       child: Icon(icon, color: color, size: 20),
                     ),
@@ -268,20 +266,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: _logout,
             ).animate().fadeIn(duration: 400.ms).slideX(begin: -0.05, curve: Curves.easeOutCubic),
 
-            _buildGlassTile(
-              icon: Icons.bug_report_rounded,
-              title: "Debug AI Parser",
-              subtitle: "Test local neural network extraction",
-              color: Constants.colorAccent,
-              trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 20),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const DebugParserScreen()),
-                );
-              },
-            ).animate().fadeIn(duration: 400.ms, delay: 50.ms).slideX(begin: -0.05, curve: Curves.easeOutCubic),
-
             const SizedBox(height: 32),
 
             // 2. PERMISSIONS & AUTOMATION SECTION
@@ -293,8 +277,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: "Storage Access",
               subtitle: "Required to export visual reports",
               trailing: Switch(
-                activeColor: Constants.colorPrimary,
-                activeTrackColor: Constants.colorPrimary.withOpacity(0.3),
+                activeThumbColor: Constants.colorPrimary,
+                activeTrackColor: Constants.colorPrimary.withValues(alpha: 0.3),
                 inactiveTrackColor: Colors.black45,
                 inactiveThumbColor: Colors.white54,
                 value: _storagePermissionGranted,
@@ -330,8 +314,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: "Auto-Drop Duplicates",
               subtitle: "Silently ignore overlapping UPI/SMS alerts",
               trailing: Switch(
-                activeColor: Constants.colorPrimary,
-                activeTrackColor: Constants.colorPrimary.withOpacity(0.3),
+                activeThumbColor: Constants.colorPrimary,
+                activeTrackColor: Constants.colorPrimary.withValues(alpha: 0.3),
                 inactiveTrackColor: Colors.black45,
                 inactiveThumbColor: Colors.white54,
                 value: _autoDropDuplicates,
@@ -344,8 +328,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: "Smart Prompts",
               subtitle: "Ask to log expense after using GPay/PhonePe",
               trailing: Switch(
-                activeColor: Constants.colorPrimary,
-                activeTrackColor: Constants.colorPrimary.withOpacity(0.3),
+                activeThumbColor: Constants.colorPrimary,
+                activeTrackColor: Constants.colorPrimary.withValues(alpha: 0.3),
                 inactiveTrackColor: Colors.black45,
                 inactiveThumbColor: Colors.white54,
                 value: _smartPromptEnabled,
@@ -357,7 +341,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         await platform.invokeMethod('openUsageAccessSettings');
                       }
                     } catch (e) {
-                      print("Failed to invoke native usage methods: $e");
+                      debugPrint("Failed to invoke native usage methods: $e");
                     }
                   }
                   final prefs = await SharedPreferences.getInstance();
@@ -391,9 +375,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(24),
                         decoration: Constants.glassDecoration.copyWith(
-                          border: Border.all(color: Constants.colorError.withOpacity(0.8), width: 2),
+                          border: Border.all(color: Constants.colorError.withValues(alpha: 0.8), width: 2),
                           boxShadow: [
-                            BoxShadow(color: Constants.colorError.withOpacity(0.2), blurRadius: 30, spreadRadius: 5)
+                            BoxShadow(color: Constants.colorError.withValues(alpha: 0.2), blurRadius: 30, spreadRadius: 5)
                           ],
                         ),
                         child: Column(
@@ -430,7 +414,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       backgroundColor: Constants.colorError,
                                       foregroundColor: Colors.white,
                                       elevation: 8,
-                                      shadowColor: Constants.colorError.withOpacity(0.5),
+                                      shadowColor: Constants.colorError.withValues(alpha: 0.5),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                     ),
                                     child: const Text(

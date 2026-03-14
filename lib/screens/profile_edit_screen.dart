@@ -26,7 +26,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   String? _profileImagePath;
 
   // Added more avatars to demonstrate horizontal scrolling
-  final List<String> _preloadedAvatars = [
+  final List<String> _preloadedAvatars = const [
     'assets/avatars/avatar1.png',
     'assets/avatars/avatar2.png',
     'assets/avatars/avatar3.png',
@@ -52,7 +52,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         _nameController.text = prefs.getString(Constants.prefUserName) ?? "";
         _budgetController.text = (prefs.getDouble(Constants.prefMonthlyBudget) ?? 0).toStringAsFixed(0);
         
-        // [UPDATED] Load the saved profile image path, or default to avatar9 if none exists
+        // Load the saved profile image path, or default to avatar9 if none exists
         _profileImagePath = prefs.getString('pref_profile_image') ?? 'assets/avatars/avatar9.png';
         
         _isLoading = false;
@@ -134,9 +134,9 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
           child: Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Constants.colorSurface.withOpacity(0.9),
+              color: Constants.colorSurface.withValues(alpha: 0.9),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -150,13 +150,13 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                   ),
                 ),
                 
-                // [FIXED] CENTERED TEXT
+                // CENTERED TEXT
                 Center(
                   child: Text("SELECT IDENTITY NODE", style: Constants.headerStyle.copyWith(fontSize: 16, letterSpacing: 2)),
                 ),
                 const SizedBox(height: 24),
                 
-                // [FIXED] EXACT 4 AVATARS VISIBLE DYNAMIC SIZING
+                // EXACT 4 AVATARS VISIBLE DYNAMIC SIZING
                 LayoutBuilder(
                   builder: (context, constraints) {
                     double spacing = 16.0;
@@ -211,7 +211,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Constants.colorPrimary.withOpacity(0.5))
+                        side: BorderSide(color: Constants.colorPrimary.withValues(alpha: 0.5))
                       ),
                     ),
                     onPressed: _pickCustomImage,
@@ -244,7 +244,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
         Text(
           title,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.5),
+            color: Colors.white.withValues(alpha: 0.5),
             fontSize: 10,
             letterSpacing: 2,
             fontWeight: FontWeight.bold,
@@ -264,11 +264,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
       fillColor: Colors.black26,
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16), 
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.05), width: 1)
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.05), width: 1)
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16), 
-        borderSide: BorderSide(color: Constants.colorPrimary.withOpacity(0.5), width: 1.5)
+        borderSide: BorderSide(color: Constants.colorPrimary.withValues(alpha: 0.5), width: 1.5)
       ),
     );
   }
@@ -284,11 +284,11 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) { // <-- REMOVED THE CONST HERE
     if (_isLoading) {
-      return Scaffold(
+      return const Scaffold(
         backgroundColor: Constants.colorBackground,
-        body: const Center(child: CircularProgressIndicator(color: Constants.colorPrimary)),
+        body: Center(child: CircularProgressIndicator(color: Constants.colorPrimary)),
       );
     }
 
@@ -332,17 +332,17 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                         width: 110,
                         height: 110,
                         decoration: BoxDecoration(
-                          color: Constants.colorSurface.withOpacity(0.8),
+                          color: Constants.colorSurface.withValues(alpha: 0.8),
                           shape: BoxShape.circle,
-                          border: Border.all(color: Constants.colorPrimary.withOpacity(0.8), width: 2),
+                          border: Border.all(color: Constants.colorPrimary.withValues(alpha: 0.8), width: 2),
                           boxShadow: [
                             BoxShadow(
-                              color: Constants.colorPrimary.withOpacity(0.2), 
+                              color: Constants.colorPrimary.withValues(alpha: 0.2), 
                               blurRadius: 24, 
                               spreadRadius: 8
                             ),
                             BoxShadow(
-                              color: Constants.colorPrimary.withOpacity(0.4), 
+                              color: Constants.colorPrimary.withValues(alpha: 0.4), 
                               blurRadius: 8, 
                               spreadRadius: 2
                             )
@@ -431,7 +431,7 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                     backgroundColor: Constants.colorPrimary,
                     foregroundColor: Colors.black,
                     elevation: 8,
-                    shadowColor: Constants.colorPrimary.withOpacity(0.4),
+                    shadowColor: Constants.colorPrimary.withValues(alpha: 0.4),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   onPressed: _saveProfile,

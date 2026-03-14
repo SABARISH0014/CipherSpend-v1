@@ -62,17 +62,17 @@ class _MPINSetupScreenState extends State<MPINSetupScreen> {
                 Container(
                   padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
-                    color: Constants.colorSurface.withOpacity(0.8),
+                    color: Constants.colorSurface.withValues(alpha: 0.8),
                     shape: BoxShape.circle,
-                    border: Border.all(color: Constants.colorPrimary.withOpacity(0.5), width: 2),
+                    border: Border.all(color: Constants.colorPrimary.withValues(alpha: 0.5), width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: Constants.colorPrimary.withOpacity(0.15),
+                        color: Constants.colorPrimary.withValues(alpha: 0.15),
                         blurRadius: 40,
                         spreadRadius: 8,
                       ),
                       BoxShadow(
-                        color: Constants.colorPrimary.withOpacity(0.3),
+                        color: Constants.colorPrimary.withValues(alpha: 0.3),
                         blurRadius: 10,
                         spreadRadius: 2,
                       )
@@ -130,11 +130,11 @@ class _MPINSetupScreenState extends State<MPINSetupScreen> {
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Colors.white.withOpacity(0.08), width: 1)
+                      borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 1)
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: Constants.colorPrimary.withOpacity(0.5), width: 1.5)
+                      borderSide: BorderSide(color: Constants.colorPrimary.withValues(alpha: 0.5), width: 1.5)
                     ),
                   ),
                 ).animate().fadeIn(delay: 400.ms).slideX(begin: 0.1),
@@ -158,7 +158,7 @@ class _MPINSetupScreenState extends State<MPINSetupScreen> {
                       backgroundColor: Constants.colorPrimary,
                       foregroundColor: Colors.black,
                       elevation: 8,
-                      shadowColor: Constants.colorPrimary.withOpacity(0.4),
+                      shadowColor: Constants.colorPrimary.withValues(alpha: 0.4),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                     onPressed: _saveMPIN,

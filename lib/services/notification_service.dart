@@ -65,7 +65,7 @@ class LocalNotificationService {
         importance: Importance.max,
         priority: Priority.high,
         // [FIX 2] Added the missing `const` keyword
-        color: const Color(0xFF00E676),
+        color: Color(0xFF00E676),
         enableLights: true,
       ),
     );

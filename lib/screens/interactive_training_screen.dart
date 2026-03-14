@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../services/db_service.dart';
@@ -22,7 +21,7 @@ class InteractiveTrainingScreen extends StatefulWidget {
 class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
   late List<String> _words;
   int? _amountIndex;
-  List<int> _merchantIndices = [];
+  final List<int> _merchantIndices = [];
 
   @override
   void initState() {
@@ -40,7 +39,7 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
         Text(
           title,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.5),
+            color: Colors.white.withValues(alpha: 0.5),
             fontSize: 10,
             letterSpacing: 2,
             fontWeight: FontWeight.bold,
@@ -62,9 +61,9 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
             decoration: Constants.glassDecoration.copyWith(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               // [FIX] Changed to uniform Border.all
-              border: Border.all(color: Constants.colorAccent.withOpacity(0.3), width: 1.5), 
+              border: Border.all(color: Constants.colorAccent.withValues(alpha: 0.3), width: 1.5), 
               boxShadow: [
-                BoxShadow(color: Constants.colorAccent.withOpacity(0.1), blurRadius: 30, spreadRadius: 5)
+                BoxShadow(color: Constants.colorAccent.withValues(alpha: 0.1), blurRadius: 30, spreadRadius: 5)
               ]
             ),
             child: SafeArea(
@@ -189,8 +188,8 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
             decoration: Constants.glassDecoration.copyWith(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               // [FIX] Changed to uniform Border.all
-              border: Border.all(color: Constants.colorError.withOpacity(0.4), width: 1.5),
-              boxShadow: [BoxShadow(color: Constants.colorError.withOpacity(0.1), blurRadius: 30, spreadRadius: 5)]
+              border: Border.all(color: Constants.colorError.withValues(alpha: 0.4), width: 1.5),
+              boxShadow: [BoxShadow(color: Constants.colorError.withValues(alpha: 0.1), blurRadius: 30, spreadRadius: 5)]
             ),
             child: SafeArea(
               child: Column(
@@ -242,7 +241,7 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
       decoration: BoxDecoration(
         color: Colors.black26,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -250,9 +249,9 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.15),
+            color: color.withValues(alpha: 0.15),
             shape: BoxShape.circle,
-            border: Border.all(color: color.withOpacity(0.3), width: 1),
+            border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
           ),
           child: Icon(icon, color: color, size: 20),
         ),
@@ -379,7 +378,7 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: Constants.glassDecoration.copyWith(
-                border: Border.all(color: Colors.white.withOpacity(0.05)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                 boxShadow: []
               ),
               child: Wrap(
@@ -404,7 +403,7 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
                           onTap: () => _showGroupTaggingBottomSheet(start, end),
                           child: _buildTokenChip(
                             groupText,
-                            Constants.colorAccent.withOpacity(0.15),
+                            Constants.colorAccent.withValues(alpha: 0.15),
                             borderColor: Constants.colorAccent,
                             textColor: Constants.colorAccent,
                             isTag: true,
@@ -420,7 +419,7 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
                       String tagLabel = "";
 
                       if (isAmount) {
-                        bgColor = Constants.colorPrimary.withOpacity(0.15);
+                        bgColor = Constants.colorPrimary.withValues(alpha: 0.15);
                         borderColor = Constants.colorPrimary;
                         textColor = Constants.colorPrimary;
                         tagLabel = "EXTRACTED AMT";
@@ -495,7 +494,7 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
         boxShadow: isTag
             ? [
                 BoxShadow(
-                  color: borderColor.withOpacity(0.3),
+                  color: borderColor.withValues(alpha: 0.3),
                   blurRadius: 10,
                   spreadRadius: 1,
                 )
@@ -519,7 +518,7 @@ class _InteractiveTrainingScreenState extends State<InteractiveTrainingScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: borderColor.withOpacity(0.2),
+                color: borderColor.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(4)
               ),
               child: Text(

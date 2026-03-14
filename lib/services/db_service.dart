@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -31,7 +32,7 @@ class DBService {
       final values = List<int>.generate(32, (i) => random.nextInt(255));
       password = base64UrlEncode(values);
       await secureStorage.write(key: 'cipher_db_key', value: password);
-      print("🔐 Generated and stored new secure vault key.");
+      debugPrint("🔐 Generated and stored new secure vault key.");
     }
 
     // 4. Open the SQLCipher database
@@ -125,7 +126,7 @@ class DBService {
         if (oldVersion < 2) {
           await db.execute(
               'CREATE TABLE IF NOT EXISTS ignored_hashes(hash TEXT PRIMARY KEY)');
-          print("🔄 Database upgraded to v2: Added Blacklist Table");
+          debugPrint("🔄 Database upgraded to v2: Added Blacklist Table");
         }
         if (oldVersion < 3) {
           await db.execute('''
@@ -135,7 +136,7 @@ class DBService {
               regex_pattern TEXT
             )
           ''');
-          print("🔄 Database upgraded to v3: Added Custom Rules Table");
+          debugPrint("🔄 Database upgraded to v3: Added Custom Rules Table");
         }
         if (oldVersion < 4) {
           // Drop the old v4 raw_messages table
@@ -150,7 +151,7 @@ class DBService {
               timestamp INTEGER
             )
           ''');
-          print("🔄 Database upgraded to v5: Added App Notifications Table");
+          debugPrint("🔄 Database upgraded to v5: Added App Notifications Table");
         }
       },
     );
@@ -247,7 +248,7 @@ class DBService {
     final file = File(path);
     if (await file.exists()) {
       await file.delete();
-      print("🗑️ Database deleted successfully.");
+      debugPrint("🗑️ Database deleted successfully.");
     }
   }
 }

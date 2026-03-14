@@ -6,8 +6,7 @@ import 'package:cipherspend/screens/dashboard_screen.dart';
 import 'package:cipherspend/services/db_service.dart';
 import 'package:cipherspend/models/transaction_model.dart';
 import 'package:cipherspend/utils/constants.dart';
-import 'package:sqflite_sqlcipher/sqflite.dart';
-import 'package:cipherspend/main.dart' as app; // Keep main for theme data
+import 'package:sqflite_sqlcipher/sqflite.dart'; // Keep main for theme data
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -17,10 +16,10 @@ void main() {
       'Should wipe, inject, refresh, and verify a transaction appears correctly',
       (WidgetTester tester) async {
         // --- PHASE 1: PRE-LAUNCH DATABASE SETUP ---
-        print("--- PHASE 1: DATABASE SETUP ---");
+        debugPrint("--- PHASE 1: DATABASE SETUP ---");
         final db = await DBService().database;
         await db.delete(Constants.tableTransactions);
-        print("✅ TEST: Transactions table wiped.");
+        debugPrint("✅ TEST: Transactions table wiped.");
 
         final mockTxn = TransactionModel(
           hash: 'integration_test_hash_1',
@@ -37,10 +36,10 @@ void main() {
           mockTxn.toMap(),
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
-        print("✅ TEST: Mock transaction for ₹1234 injected.");
+        debugPrint("✅ TEST: Mock transaction for ₹1234 injected.");
 
         // --- PHASE 2: LAUNCH DIRECTLY INTO DASHBOARD ---
-        print("\n--- PHASE 2: UI LAUNCH & INTERACTION ---");
+        debugPrint("\n--- PHASE 2: UI LAUNCH & INTERACTION ---");
 
         // [FIX] We launch a MaterialApp wrapping ONLY the DashboardScreen.
         // This bypasses the complex login/setup flow entirely.
@@ -52,10 +51,10 @@ void main() {
 
         // Wait for the Dashboard to run its initial _loadData()
         await tester.pumpAndSettle(const Duration(seconds: 5));
-        print("✅ APP: Dashboard launched directly.");
+        debugPrint("✅ APP: Dashboard launched directly.");
 
         // --- PHASE 3: VERIFICATION ---
-        print("\n--- PHASE 3: VERIFICATION ---");
+        debugPrint("\n--- PHASE 3: VERIFICATION ---");
 
         // Find the ListView that contains our transactions
         final listViewFinder = find.byType(ListView);
@@ -84,7 +83,7 @@ void main() {
             findsOneWidget,
             reason: "Amount '₹1234' should be visible in the list");
 
-        print("🎉🎉🎉 SUCCESS: End-to-end dashboard test passed!");
+        debugPrint("🎉🎉🎉 SUCCESS: End-to-end dashboard test passed!");
       },
     );
   });
