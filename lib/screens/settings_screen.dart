@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_animate/flutter_animate.dart'; 
 import '../services/auth_service.dart';
 import '../services/db_service.dart';
@@ -22,7 +21,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // State for preferences
   bool _autoDropDuplicates = false;
   bool _smartPromptEnabled = false;
-  bool _storagePermissionGranted = false;
 
   @override
   void initState() {
@@ -33,13 +31,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Load preferences on screen start
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    bool storageGranted = await Permission.storage.isGranted ||
-        await Permission.manageExternalStorage.isGranted;
 
     setState(() {
       _autoDropDuplicates = (prefs.getString('dedupe_rule') == 'auto_drop');
       _smartPromptEnabled = prefs.getBool('smart_prompt_enabled') ?? false;
-      _storagePermissionGranted = storageGranted;
     });
   }
 
@@ -271,43 +266,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // 2. PERMISSIONS & AUTOMATION SECTION
             _buildSectionHeader(Icons.memory_rounded, "AUTOMATION & PERMISSIONS").animate().fadeIn(delay: 100.ms),
             const SizedBox(height: 16),
-
-            _buildGlassTile(
-              icon: Icons.folder_shared_rounded,
-              title: "Storage Access",
-              subtitle: "Required to export visual reports",
-              trailing: Switch(
-                activeThumbColor: Constants.colorPrimary,
-                activeTrackColor: Constants.colorPrimary.withValues(alpha: 0.3),
-                inactiveTrackColor: Colors.black45,
-                inactiveThumbColor: Colors.white54,
-                value: _storagePermissionGranted,
-                onChanged: (value) async {
-                  if (value) {
-                    await [
-                      Permission.storage,
-                      Permission.manageExternalStorage,
-                    ].request();
-                    bool granted = await Permission.storage.isGranted ||
-                        await Permission.manageExternalStorage.isGranted;
-                    setState(() => _storagePermissionGranted = granted);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          "Permissions cannot be disabled in-app. Please revoke it from Android Settings.",
-                          style: Constants.fontRegular.copyWith(color: Colors.black, fontWeight: FontWeight.bold),
-                        ),
-                        backgroundColor: Colors.orangeAccent,
-                        behavior: SnackBarBehavior.floating,
-                        duration: const Duration(seconds: 4),
-                      ),
-                    );
-                    openAppSettings();
-                  }
-                },
-              ),
-            ).animate().fadeIn(duration: 400.ms, delay: 150.ms).slideX(begin: -0.05, curve: Curves.easeOutCubic),
 
             _buildGlassTile(
               icon: Icons.difference_rounded,

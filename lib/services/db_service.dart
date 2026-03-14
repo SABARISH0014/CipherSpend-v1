@@ -157,6 +157,60 @@ class DBService {
     );
   }
 
+  // --- Advanced Search & Filter Logic ---
+  
+  Future<List<Map<String, dynamic>>> searchTransactions({
+    String? query,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? category,
+    String? type,
+  }) async {
+    final db = await database;
+    
+    List<String> whereClauses = [];
+    List<dynamic> whereArgs = [];
+
+    // 1. Keyword Search
+    if (query != null && query.isNotEmpty) {
+      whereClauses.add('(merchant LIKE ? OR category LIKE ?)');
+      whereArgs.add('%$query%');
+      whereArgs.add('%$query%');
+    }
+
+    // 2. Date Range Filters
+    if (startDate != null) {
+      whereClauses.add('timestamp >= ?');
+      whereArgs.add(startDate.millisecondsSinceEpoch);
+    }
+    if (endDate != null) {
+      whereClauses.add('timestamp <= ?');
+      whereArgs.add(endDate.millisecondsSinceEpoch);
+    }
+
+    // 3. Category Filter (COLLATE NOCASE fixes case-sensitivity issues)
+    if (category != null && category != 'All') {
+      whereClauses.add('category COLLATE NOCASE = ?');
+      whereArgs.add(category);
+    }
+
+    // 4. Type Filter
+    if (type != null && type != 'All') {
+      whereClauses.add('type COLLATE NOCASE = ?');
+      whereArgs.add(type);
+    }
+
+    // Combine clauses into a single WHERE string
+    String? whereString = whereClauses.isNotEmpty ? whereClauses.join(' AND ') : null;
+
+    return await db.query(
+      Constants.tableTransactions,
+      where: whereString,
+      whereArgs: whereArgs.isNotEmpty ? whereArgs : null,
+      orderBy: 'timestamp DESC',
+    );
+  }
+
   // --- Week 4 Helper Methods ---
 
   Future<void> saveAppNotification(String title, String body, int timestamp) async {

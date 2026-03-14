@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../models/transaction_model.dart';
@@ -53,19 +53,43 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
   Future<void> _performSearch() async {
     setState(() => _isLoading = true);
 
-    final results = await _smsService.searchTransactions(
-      query: _searchController.text.trim(),
-      startDate: _startDate,
-      endDate: _endDate,
-      category: _selectedCategory,
-      type: _selectedType,
-    );
+    // 1. FIX THE END DATE BUG
+    // Push the end date to 23:59:59 so it includes the entire final day
+    DateTime? adjustedEndDate = _endDate;
+    if (adjustedEndDate != null) {
+      adjustedEndDate = DateTime(
+        adjustedEndDate.year, 
+        adjustedEndDate.month, 
+        adjustedEndDate.day, 
+        23, 59, 59
+      );
+    }
 
-    if (mounted) {
-      setState(() {
-        _transactions = results;
-        _isLoading = false;
-      });
+    // 2. SAFELY HANDLE "All"
+    // If the user selects "All", we pass 'null' to the database so it knows to skip that filter
+    String? queryCat = _selectedCategory == "All" ? null : _selectedCategory;
+    String? queryType = _selectedType == "All" ? null : _selectedType;
+
+    try {
+      final results = await _smsService.searchTransactions(
+        query: _searchController.text.trim(),
+        startDate: _startDate,
+        endDate: adjustedEndDate,
+        category: queryCat,
+        type: queryType,
+      );
+
+      if (mounted) {
+        setState(() {
+          _transactions = results;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Search error: $e");
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -265,6 +289,7 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
     );
   }
 
+// --- DIRECT DOWNLOAD EXPORT LOGIC ---
   Future<void> _exportToCSV() async {
     if (_transactions.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -278,22 +303,6 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
     }
 
     try {
-      if (Platform.isAndroid) {
-        var status = await Permission.storage.status;
-        if (!status.isGranted) {
-          status = await Permission.storage.request();
-          if (!status.isGranted) {
-            var manageStatus = await Permission.manageExternalStorage.status;
-            if (!manageStatus.isGranted) {
-              manageStatus = await Permission.manageExternalStorage.request();
-            }
-            if (!manageStatus.isGranted) {
-              throw Exception("Storage permission is required to save the export.");
-            }
-          }
-        }
-      }
-
       // Build CSV String
       StringBuffer csvData = StringBuffer();
       // Headers
@@ -302,41 +311,42 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
       // Rows
       for (var txn in _transactions) {
         String dateStr = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.fromMillisecondsSinceEpoch(txn.timestamp));
-        // Escape merchants with commas
         String safeMerchant = txn.merchant.contains(',') ? '"${txn.merchant}"' : txn.merchant;
         String safeCategory = txn.category.contains(',') ? '"${txn.category}"' : txn.category;
         
         csvData.writeln("$dateStr,$safeMerchant,${txn.amount},$safeCategory,${txn.type},${txn.hash},${txn.sender}");
       }
 
-      // Save to directory
-      Directory? directory;
-      if (Platform.isAndroid) {
-        directory = Directory('/storage/emulated/0/Download');
-        // Fallback if somehow that doesn't exist
-        if (!await directory.exists()) {
-          directory = await getExternalStorageDirectory();
-        }
-      } else {
-        directory = await getDownloadsDirectory();
-      }
-
-      if (directory == null) throw Exception("Could not access downloads directory.");
+      // 1. Save to hidden temporary cache first
+      final directory = await getTemporaryDirectory();
       final String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-      final String path = '${directory.path}/CipherSpend_Export_$timestamp.csv';
+      final String fileName = 'CipherSpend_Export_$timestamp.csv';
+      final String tempFilePath = '${directory.path}/$fileName';
       
-      final File file = File(path);
-      await file.writeAsString(csvData.toString());
+      final File tempFile = File(tempFilePath);
+      await tempFile.writeAsString(csvData.toString());
 
+      // 2. Trigger native Android Save Dialog directly to Downloads folder
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Export saved to: $path", style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-            backgroundColor: Constants.colorPrimary,
-            duration: const Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-          ),
+        final params = SaveFileDialogParams(
+          sourceFilePath: tempFile.path,
+          fileName: fileName,
         );
+        
+        // This opens the Android file picker and returns the path if the user saves it
+        final filePath = await FlutterFileDialog.saveFile(params: params);
+
+        // 3. Show Success Message if they didn't cancel
+        if (filePath != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Successfully saved to Downloads folder!", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              backgroundColor: Constants.colorPrimary,
+              duration: Duration(seconds: 4),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -597,12 +607,12 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
                       controller: _searchController,
                       style: Constants.fontRegular.copyWith(color: Colors.white, fontSize: 15),
                       decoration: InputDecoration(
-                        hintText: "Search registry...",
-                        hintStyle: Constants.fontRegular.copyWith(color: Colors.white30, letterSpacing: 1),
-                        prefixIcon: const Icon(Icons.search_rounded, color: Colors.white54, size: 20),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
+  hintText: "Search registry...",
+  hintStyle: Constants.fontRegular.copyWith(color: Colors.white30, letterSpacing: 1), // <-- FIXED
+  prefixIcon: const Icon(Icons.search_rounded, color: Colors.white54, size: 20),
+  border: InputBorder.none,
+  contentPadding: const EdgeInsets.symmetric(vertical: 16),
+),
                       onSubmitted: (_) => _performSearch(),
                     ),
                   ),

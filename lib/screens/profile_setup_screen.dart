@@ -129,49 +129,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     await Permission.sms.request();
 
     if (!mounted) return;
-    await _checkStorageAndProceed();
+    
+    // Skip storage check entirely and proceed directly to Listener check
+    await _checkListenerAndProceed();
   }
 
-  // --- STEP 1: STORAGE ACCESS ---
-  Future<void> _checkStorageAndProceed() async {
-    try {
-      bool isStorageGranted = await Permission.storage.isGranted;
-      bool isManageGranted = await Permission.manageExternalStorage.isGranted;
-
-      if (isStorageGranted || isManageGranted) {
-        _checkListenerAndProceed();
-      } else {
-        if (!mounted) return;
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => _buildGlassDialog(
-            title: "STORAGE ACCESS",
-            icon: Icons.folder_shared_rounded,
-            content:
-                "CipherSpend requires storage access to securely generate and export your monthly visual reports to PDF and CSV formats.\n\nTap ENABLE on the next prompt to authorize.",
-            onSkip: () {
-              Navigator.pop(ctx);
-              _checkListenerAndProceed();
-            },
-            onAllow: () async {
-              Navigator.pop(ctx);
-              await [
-                Permission.storage,
-                Permission.manageExternalStorage,
-              ].request();
-              if (!mounted) return;
-              _checkListenerAndProceed();
-            },
-          ),
-        );
-      }
-    } catch (e) {
-      _checkListenerAndProceed();
-    }
-  }
-
-  // --- STEP 2: NOTIFICATION LISTENER ---
+  // --- STEP 1: NOTIFICATION LISTENER ---
   Future<void> _checkListenerAndProceed() async {
     bool isEnabled = false;
     try {
@@ -209,7 +172,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     }
   }
 
-  // --- STEP 3: SMART PROMPTS (USAGE ACCESS) ---
+  // --- STEP 2: SMART PROMPTS (USAGE ACCESS) ---
   Future<void> _askSmartPromptAndProceed() async {
     bool hasAccess = false;
     try {
@@ -255,7 +218,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     }
   }
 
-  // --- STEP 4: DUPLICATE PREFERENCE ---
+  // --- STEP 3: DUPLICATE PREFERENCE ---
   Future<void> _askDedupePreference() async {
     if (!mounted) return;
 
@@ -287,7 +250,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     );
   }
 
-  // --- STEP 5: FINISH SETUP AND NAVIGATE ---
+  // --- STEP 4: FINISH SETUP AND NAVIGATE ---
   Future<void> _finishSetupAndNavigate() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(Constants.prefIsSetupComplete, true);
