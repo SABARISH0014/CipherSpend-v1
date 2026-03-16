@@ -282,20 +282,25 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 32), // Added a bit more breathing room above the buttons
+                
+                // === CORRECTED BUTTON ROW ===
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
-                      child: Text("DISMISS", style: Constants.fontRegular),
+                      child: Text("DISMISS", style: Constants.fontRegular.copyWith(color: Colors.white54)),
                     ),
                     const SizedBox(width: 12),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14), // Perfect padding
                         backgroundColor: Constants.colorPrimary,
                         foregroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: 6, // Slight glow effect
+                        shadowColor: Constants.colorPrimary.withValues(alpha: 0.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                       onPressed: () async {
                         double amount = double.tryParse(amountController.text) ?? 0.0;
@@ -315,7 +320,10 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                           _loadData(); 
                         }
                       },
-                      child: const Text("LOG EXPENSE", style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: const Text(
+                        "LOG EXPENSE", 
+                        style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2, fontSize: 14)
+                      ),
                     ),
                   ],
                 ),
@@ -326,7 +334,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
       ),
     );
   }
-
+  
   void _listenToLiveSMS() {
     _smsService.liveTransactionStream.listen((txn) async {
       if (txn != null) {
