@@ -11,7 +11,16 @@ import '../utils/constants.dart';
 import 'transaction_detail_screen.dart';
 
 class SearchExportScreen extends StatefulWidget {
-  const SearchExportScreen({super.key});
+  final bool isGlobalSyncing;
+  final int refreshTrigger;
+  final VoidCallback? onReturnToDashboard;
+
+  const SearchExportScreen({
+    super.key, 
+    this.isGlobalSyncing = false,
+    this.refreshTrigger = 0,
+    this.onReturnToDashboard,
+  });
 
   @override
   State<SearchExportScreen> createState() => _SearchExportScreenState();
@@ -42,6 +51,16 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
   void initState() {
     super.initState();
     _performSearch();
+  }
+
+  @override
+  void didUpdateWidget(SearchExportScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isGlobalSyncing && !widget.isGlobalSyncing) {
+      _performSearch();
+    } else if (oldWidget.refreshTrigger != widget.refreshTrigger) {
+      _performSearch();
+    }
   }
 
   @override
@@ -567,6 +586,8 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isGlobalSyncing) return const SizedBox.shrink();
+
     int filterCount = 0;
     if (_startDate != null) filterCount++;
     if (_selectedCategory != "All") filterCount++;
@@ -580,6 +601,12 @@ class _SearchExportScreenState extends State<SearchExportScreen> {
         scrolledUnderElevation: 0, 
         surfaceTintColor: Colors.transparent, 
         centerTitle: false, 
+        leading: widget.onReturnToDashboard != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70, size: 20),
+                onPressed: widget.onReturnToDashboard,
+              )
+            : null,
         title: Padding(
           padding: const EdgeInsets.only(left: 8.0),
           child: Text(

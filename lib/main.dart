@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'screens/startup_screen.dart'; // Imports the file
-import 'services/ai_service.dart';
+import 'screens/startup_screen.dart';
 import 'utils/constants.dart';
 
 void main() async {
   // 1. Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. Load the AI Model 
-  // We do this BEFORE runApp so the AI is ready as soon as the app opens
-  await AIService().loadModel();
 
   // 3. Lock orientation to Portrait for better UI stability
   await SystemChrome.setPreferredOrientations([

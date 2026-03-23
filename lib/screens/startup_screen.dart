@@ -5,7 +5,8 @@ import '../services/auth_service.dart';
 import '../utils/constants.dart';
 import 'profile_setup_screen.dart';
 import 'verification_screen.dart';
-import 'dashboard_screen.dart';
+import 'main_wrapper_screen.dart';
+import '../services/ai_service.dart';
 
 class StartupScreen extends StatefulWidget {
   final bool isSuccessMode;
@@ -32,8 +33,11 @@ class _StartupScreenState extends State<StartupScreen> {
 
   // Handle the logic for checking user status on cold boot
   Future<void> _handleInitialBoot() async {
-    // Futuristic show-off delay for animations to play out
-    await Future.delayed(const Duration(milliseconds: 2500)); 
+    // Futuristic show-off delay for animations to play out, while simultaneously loading the AI model!
+    await Future.wait([
+      AIService().loadModel(),
+      Future.delayed(const Duration(milliseconds: 2500)),
+    ]);
     
     final prefs = await SharedPreferences.getInstance();
     bool isComplete = prefs.getBool(Constants.prefIsSetupComplete) ?? false;
@@ -58,10 +62,13 @@ class _StartupScreenState extends State<StartupScreen> {
 
   // Handle the logic after a successful MPIN/Biometric unlock
   Future<void> _handleSuccessTransition() async {
-    await Future.delayed(const Duration(milliseconds: 1800));
+    await Future.wait([
+      AIService().loadModel(),
+      Future.delayed(const Duration(milliseconds: 1800)),
+    ]);
     if (!mounted) return;
     Navigator.pushReplacement(
-        context, MaterialPageRoute(builder: (_) => const DashboardScreen()));
+        context, MaterialPageRoute(builder: (_) => const MainWrapperScreen()));
   }
 
   @override

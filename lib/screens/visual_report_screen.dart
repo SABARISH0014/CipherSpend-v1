@@ -4,20 +4,31 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../models/transaction_model.dart';
 import '../utils/constants.dart';
 
-class VisualReportScreen extends StatefulWidget {
-  final List<TransactionModel> transactions;
-  final double budget;
+import '../services/sms_service.dart';
+import '../services/prediction_service.dart';
 
-  const VisualReportScreen(
-      {super.key, required this.transactions, required this.budget});
+class VisualReportScreen extends StatefulWidget {
+  final bool isGlobalSyncing;
+  final int refreshTrigger;
+  final VoidCallback? onReturnToDashboard;
+
+  const VisualReportScreen({
+    super.key, 
+    this.isGlobalSyncing = false,
+    this.refreshTrigger = 0,
+    this.onReturnToDashboard,
+  });
 
   @override
   State<VisualReportScreen> createState() => _VisualReportScreenState();
 }
 
-class _VisualReportScreenState extends State<VisualReportScreen>
-    with SingleTickerProviderStateMixin {
+class _VisualReportScreenState extends State<VisualReportScreen> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  
+  List<TransactionModel> _transactions = [];
+  double _budget = 1.0;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -26,6 +37,33 @@ class _VisualReportScreenState extends State<VisualReportScreen>
       vsync: this,
       duration: const Duration(seconds: 2), // Speed of the flow
     )..repeat(); // Loop indefinitely
+    
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final now = DateTime.now();
+    final list = await SmsService().getTransactionsByMonth(now);
+    final forecastData = await PredictionService().getForecastForMonth(now);
+    
+    if (mounted) {
+      setState(() {
+        _transactions = list;
+        _budget = forecastData['budget'] ?? 1.0;
+        if (_budget == 0) _budget = 1.0; // Prevent divide by zero
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(VisualReportScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isGlobalSyncing && !widget.isGlobalSyncing) {
+      _loadData();
+    } else if (oldWidget.refreshTrigger != widget.refreshTrigger) {
+      _loadData();
+    }
   }
 
   @override
@@ -36,11 +74,20 @@ class _VisualReportScreenState extends State<VisualReportScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isGlobalSyncing) return const SizedBox.shrink();
+
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Constants.colorBackground,
+        body: Center(child: CircularProgressIndicator(color: Constants.colorPrimary)),
+      );
+    }
+
     // 1. Group Data by Category
     Map<String, double> categoryTotals = {};
     double totalSpent = 0;
 
-    for (var txn in widget.transactions) {
+    for (var txn in _transactions) {
       categoryTotals[txn.category] =
           (categoryTotals[txn.category] ?? 0) + txn.amount;
       totalSpent += txn.amount;
@@ -57,16 +104,18 @@ class _VisualReportScreenState extends State<VisualReportScreen>
         scrolledUnderElevation: 0, // Prevents scroll color-shift
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
+        leading: widget.onReturnToDashboard != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70, size: 20),
+                onPressed: widget.onReturnToDashboard,
+              )
+            : null,
         title: Padding(
           padding: const EdgeInsets.only(left: 8.0),
           child: Text(
             "FLOW ANALYSIS", 
             style: Constants.headerStyle.copyWith(fontSize: 16, letterSpacing: 2)
           ),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70, size: 20),
-          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: SingleChildScrollView(
@@ -109,7 +158,7 @@ class _VisualReportScreenState extends State<VisualReportScreen>
                     return CustomPaint(
                       size: Size(MediaQuery.of(context).size.width * 0.8, 350),
                       painter: SankeyPainter(
-                        budget: widget.budget,
+                        budget: _budget,
                         totalSpent: totalSpent,
                         categories: sortedEntries,
                         animationValue: _controller.value,

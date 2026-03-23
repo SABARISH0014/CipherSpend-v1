@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart'; 
 import '../models/transaction_model.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/training_service.dart';
 import '../utils/constants.dart';
 import 'interactive_training_screen.dart';
@@ -23,13 +25,24 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   List<String> _categories = [];
   bool _isLoading = true;
   bool _wasModified = false; 
+  bool _advancedSettings = false;
 
   @override
   void initState() {
     super.initState();
     _selectedCategory = widget.transaction.category;
     _currentMerchant = widget.transaction.merchant;
+    _loadSettings();
     _loadCategories();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _advancedSettings = prefs.getBool('advanced_settings') ?? false;
+      });
+    }
   }
 
   Future<void> _loadCategories() async {
@@ -44,6 +57,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Future<void> _saveTraining() async {
+    HapticFeedback.heavyImpact();
     setState(() => _isLoading = true);
     await _trainingService.trainTransaction(
         widget.transaction.hash, _selectedCategory);
@@ -60,6 +74,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Future<void> _showEditMerchantDialog() async {
+    HapticFeedback.lightImpact();
     final TextEditingController controller = TextEditingController(text: _currentMerchant);
     
     final List<String> payloadTokens = widget.transaction.body
@@ -153,6 +168,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           children: payloadTokens.map((token) {
                             return InkWell(
                               onTap: () {
+                                HapticFeedback.lightImpact();
                                 final currentText = controller.text.trim();
                                 if (currentText.isEmpty) {
                                   controller.text = token;
@@ -199,7 +215,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             shadowColor: Constants.colorAccent.withValues(alpha: 0.4),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
-                          onPressed: () => Navigator.pop(context, controller.text.trim()),
+                          onPressed: () {
+                            HapticFeedback.selectionClick();
+                            Navigator.pop(context, controller.text.trim());
+                          },
                           child: const Text("UPDATE", style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1)),
                         ),
                       ],
@@ -337,22 +356,25 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     _buildSectionHeader(Icons.analytics_rounded, "EXTRACTED_METADATA").animate().fadeIn(delay: 300.ms),
                     const SizedBox(height: 12), // [BALANCED]
                     
-                    Container(
-                      padding: const EdgeInsets.all(18), // [BALANCED]
-                      decoration: Constants.glassDecoration.copyWith(
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                        boxShadow: []
-                      ),
-                      child: Column(
-                        children: [
-                          _buildFactRow("EXTRACTED_AMT", "₹${widget.transaction.amount}"),
-                          const Divider(color: Colors.white10, height: 20), // [BALANCED]
-                          _buildFactRow("TARGET_NODE", _currentMerchant, onEdit: _showEditMerchantDialog, highlightColor: Constants.colorAccent),
-                          const Divider(color: Colors.white10, height: 20), // [BALANCED]
-                          _buildFactRow("PAYMENT_VECTOR", widget.transaction.type),
-                          const Divider(color: Colors.white10, height: 20), // [BALANCED]
-                          _buildFactRow("TIMESTAMP", "${date.day}/${date.month} ${date.hour}:${date.minute}"),
-                        ],
+                    ClipPath(
+                      clipper: TicketClipper(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24), // [BALANCED]
+                        decoration: BoxDecoration(
+                          color: Constants.colorBackground,
+                          border: Border.symmetric(vertical: BorderSide(color: Constants.colorPrimary.withValues(alpha: 0.3), width: 1.5)),
+                        ),
+                        child: Column(
+                          children: [
+                            _buildFactRow("EXTRACTED_AMT", "₹${widget.transaction.amount}"),
+                            const Divider(color: Colors.white10, height: 28, thickness: 1), // [BALANCED]
+                            _buildFactRow("TARGET_NODE", _currentMerchant, onEdit: _showEditMerchantDialog, highlightColor: Constants.colorAccent),
+                            const Divider(color: Colors.white10, height: 28, thickness: 1), // [BALANCED]
+                            _buildFactRow("PAYMENT_VECTOR", widget.transaction.type),
+                            const Divider(color: Colors.white10, height: 28, thickness: 1), // [BALANCED]
+                            _buildFactRow("TIMESTAMP", "${date.day}/${date.month} ${date.hour}:${date.minute}"),
+                          ],
+                        ),
                       ),
                     ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.1),
 
@@ -418,40 +440,45 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       ),
                     ).animate().fadeIn(delay: 700.ms).scale(),
 
-                    const SizedBox(height: 14), // [BALANCED]
+                    if (_advancedSettings) ...[
+                      const SizedBox(height: 14), // [BALANCED]
 
-                    // 5. REGEX TRAINING BUTTON
-                    SizedBox(
-                      width: double.infinity,
-                      height: 54, // [BALANCED] Raised from 52 to 54
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                            foregroundColor: Constants.colorAccent,
-                            side: const BorderSide(color: Constants.colorAccent, width: 1.5),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12))),
-                        icon: const Icon(Icons.model_training_rounded, size: 20),
-                        onPressed: () {
-      ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing before routing!
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => InteractiveTrainingScreen(
-            smsBody: widget.transaction.body,
-            sender: widget.transaction.sender,
+                      // 5. REGEX TRAINING BUTTON
+                      SizedBox(
+                        width: double.infinity,
+                        height: 54, // [BALANCED] Raised from 52 to 54
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                              foregroundColor: Constants.colorAccent,
+                              side: const BorderSide(color: Constants.colorAccent, width: 1.5),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12))),
+                          icon: const Icon(Icons.model_training_rounded, size: 20),
+                          onPressed: () {
+        HapticFeedback.selectionClick();
+        ScaffoldMessenger.of(context).clearSnackBars(); // Clear existing before routing!
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => InteractiveTrainingScreen(
+              smsBody: widget.transaction.body,
+              sender: widget.transaction.sender,
+            ),
           ),
-        ),
-      );
-    },
-                        label: const Text("TRAIN REGEX PARSER",
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 2,
-                                fontSize: 14)), // [BALANCED]
-                      ),
-                    ).animate().fadeIn(delay: 800.ms).scale(),
-                    
-                    const SizedBox(height: 20), // Bottom padding
+        );
+      },
+                          label: const Text("TRAIN REGEX PARSER",
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 2,
+                                  fontSize: 14)), // [BALANCED]
+                        ),
+                      ).animate().fadeIn(delay: 800.ms).scale(),
+                      
+                      const SizedBox(height: 20), // Bottom padding
+                    ] else ...[
+                      const SizedBox(height: 20),
+                    ],
                   ],
                 ),
               ),
@@ -475,15 +502,21 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Flexible(
-                  child: Text(
-                    value,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                        color: highlightColor ?? Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'monospace',
-                        fontSize: 14), // [BALANCED] 
-                  ),
+                      child: Hero(
+                        tag: 'merchant_${widget.transaction.hash}',
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: Text(
+                            value,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                                color: highlightColor ?? Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'monospace',
+                                fontSize: 14), // [BALANCED] 
+                          ),
+                        ),
+                      ),
                 ),
                 if (onEdit != null) ...[
                   const SizedBox(width: 8),
@@ -495,6 +528,50 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           ),
         ),
       ],
-    );
+                    );
   }
+}
+
+// --- TERMINAL RECEIPT CLIPPER ---
+class TicketClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    Path path = Path();
+    double w = size.width;
+    double h = size.height;
+    double toothSize = 6.0;
+
+    path.moveTo(0, 0);
+
+    // Top jagged edge
+    bool up = false;
+    for (double i = 0; i < w; i += toothSize) {
+      if (up) {
+        path.lineTo(i, 0);
+      } else {
+        path.lineTo(i, toothSize);
+      }
+      up = !up;
+    }
+    path.lineTo(w, 0);
+    path.lineTo(w, h);
+
+    // Bottom jagged edge
+    up = true;
+    for (double i = w; i > 0; i -= toothSize) {
+      if (up) {
+        path.lineTo(i, h - toothSize);
+      } else {
+        path.lineTo(i, h);
+      }
+      up = !up;
+    }
+    path.lineTo(0, h);
+    path.close();
+
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
 
 class DBService {
@@ -35,11 +36,12 @@ class DBService {
       debugPrint("🔐 Generated and stored new secure vault key.");
     }
 
-    // 4. Open the SQLCipher database
-    return await openDatabase(
-      path,
-      password: password,
-      version: 5,
+    // 4. Open the SQLCipher database with an automated fallback for HMAC/Corruption errors
+    Future<Database> tryOpenDb(String currentPassword) async {
+      return await openDatabase(
+        path,
+        password: currentPassword,
+        version: 5,
       onOpen: (db) async {
         // [THE FIX] Bulletproof fallback: Ensures tables exist every time the app opens (useful for flutter hot reloads)
         await db.execute(
@@ -155,6 +157,35 @@ class DBService {
         }
       },
     );
+    }
+
+    try {
+      return await tryOpenDb(password);
+    } catch (e) {
+      debugPrint("⚠️ SQLCipher Open Error (Likely HMAC/Key Mismatch): $e");
+      debugPrint("🗑️ Wiping corrupted database and creating a fresh secure vault...");
+      
+      await deleteDatabase(path);
+      try {
+        if (await File(path).exists()) await File(path).delete();
+        if (await File('$path-wal').exists()) await File('$path-wal').delete();
+        if (await File('$path-shm').exists()) await File('$path-shm').delete();
+        if (await File('$path-journal').exists()) await File('$path-journal').delete();
+      } catch (e) {
+        debugPrint("⚠️ Could not forcibly delete some DB fragment files: $e");
+      }
+      
+      final random = Random.secure();
+      final values = List<int>.generate(32, (i) => random.nextInt(255));
+      password = base64UrlEncode(values);
+      await secureStorage.write(key: 'cipher_db_key', value: password);
+      
+      // CRITICAL: Reset the sync flag so the app runs the initial import again on reset!
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('has_initial_sync_completed', false);
+      
+      return await tryOpenDb(password);
+    }
   }
 
   // --- Advanced Search & Filter Logic ---

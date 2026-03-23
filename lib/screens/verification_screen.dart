@@ -7,6 +7,7 @@ import '../utils/constants.dart';
 import '../services/auth_service.dart';
 import 'startup_screen.dart'; 
 import 'mpin_setup_screen.dart';
+import '../widgets/restricted_settings_dialog.dart';
 
 class VerificationScreen extends StatefulWidget {
   const VerificationScreen({super.key});
@@ -69,6 +70,15 @@ class _VerificationScreenState extends State<VerificationScreen> {
     // New User Device Verification Logic
     if (input.length == 10) {
       var status = await Permission.sms.request();
+      if (status.isPermanentlyDenied) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => const RestrictedSettingsDialog(),
+        );
+        return;
+      }
       if (!status.isGranted) {
         setState(() => _statusMessage = "❌ SMS Permission required to secure node.");
         return;

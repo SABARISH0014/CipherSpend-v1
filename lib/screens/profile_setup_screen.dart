@@ -5,7 +5,8 @@ import 'package:local_auth/local_auth.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../utils/constants.dart';
-import 'dashboard_screen.dart';
+import 'main_wrapper_screen.dart';
+import '../widgets/restricted_settings_dialog.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -126,7 +127,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     await prefs.setDouble(Constants.prefMonthlyBudget, budget);
     await prefs.setInt(Constants.prefSalaryDate, salaryDate);
 
-    await Permission.sms.request();
+    var status = await Permission.sms.request();
+    if (status.isPermanentlyDenied) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const RestrictedSettingsDialog(),
+      );
+      return;
+    }
 
     if (!mounted) return;
     
@@ -258,7 +268,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen>
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        MaterialPageRoute(builder: (_) => const MainWrapperScreen()),
       );
     }
   }

@@ -8,7 +8,9 @@ import '../utils/constants.dart';
 import 'verification_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  final VoidCallback? onReturnToDashboard;
+
+  const SettingsScreen({super.key, this.onReturnToDashboard});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -21,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // State for preferences
   bool _autoDropDuplicates = false;
   bool _smartPromptEnabled = false;
+  bool _advancedSettings = false;
 
   @override
   void initState() {
@@ -35,6 +38,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _autoDropDuplicates = (prefs.getString('dedupe_rule') == 'auto_drop');
       _smartPromptEnabled = prefs.getBool('smart_prompt_enabled') ?? false;
+      _advancedSettings = prefs.getBool('advanced_settings') ?? false;
     });
   }
 
@@ -245,10 +249,12 @@ Future<void> _triggerKillSwitch() async {
             style: Constants.headerStyle.copyWith(fontSize: 16, letterSpacing: 2)
           ),
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
+        leading: widget.onReturnToDashboard != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white70, size: 20),
+                onPressed: widget.onReturnToDashboard,
+              )
+            : null,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -316,6 +322,24 @@ Future<void> _triggerKillSwitch() async {
                 },
               ),
             ).animate().fadeIn(duration: 400.ms, delay: 250.ms).slideX(begin: -0.05, curve: Curves.easeOutCubic),
+
+            _buildGlassTile(
+              icon: Icons.developer_mode_rounded,
+              title: "Advanced Settings",
+              subtitle: "Enable manual syncing and interactive parser training",
+              trailing: Switch(
+                activeThumbColor: Constants.colorPrimary,
+                activeTrackColor: Constants.colorPrimary.withValues(alpha: 0.3),
+                inactiveTrackColor: Colors.black45,
+                inactiveThumbColor: Colors.white54,
+                value: _advancedSettings,
+                onChanged: (value) async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('advanced_settings', value);
+                  setState(() => _advancedSettings = value);
+                },
+              ),
+            ).animate().fadeIn(duration: 400.ms, delay: 300.ms).slideX(begin: -0.05, curve: Curves.easeOutCubic),
 
             const SizedBox(height: 40),
 

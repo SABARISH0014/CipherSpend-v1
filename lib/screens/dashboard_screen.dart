@@ -12,13 +12,8 @@ import '../services/prediction_service.dart';
 import '../services/notification_service.dart';
 import '../models/transaction_model.dart';
 import '../utils/constants.dart';
-import '../widgets/sync_overlay.dart'; 
 
 import 'transaction_detail_screen.dart';
-import 'settings_screen.dart';
-import 'manual_entry_screen.dart';
-import 'visual_report_screen.dart';
-import 'search_export_screen.dart';
 import 'app_notifications_screen.dart';
 import 'profile_edit_screen.dart';
 
@@ -33,7 +28,14 @@ Future<void> requestSmsPermissions() async {
 }
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final bool isGlobalSyncing;
+  final int refreshTrigger;
+
+  const DashboardScreen({
+    super.key, 
+    this.isGlobalSyncing = false,
+    this.refreshTrigger = 0,
+  });
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -57,19 +59,30 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
   DateTime _selectedMonth = DateTime.now();
   bool _isLoading = true;
   int _appNotificationCount = 0;
-  bool _isFabPressed = false;
-
-  // --- SYNC STATE VARIABLES ---
-  bool _isSyncing = false;
-  int _totalToSync = 0;
-  int _currentSynced = 0;
+  bool _advancedSettings = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _checkAndRunInitialSync(); 
+    
+    // Wait for the global sync to finish. If not syncing, load immediately.
+    if (!widget.isGlobalSyncing) {
+      _loadData();
+    }
+    
     _listenToLiveSMS();
+  }
+
+  @override
+  void didUpdateWidget(DashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If global sync just finished (true -> false), load the data!
+    if (oldWidget.isGlobalSyncing && !widget.isGlobalSyncing) {
+      _loadData();
+    } else if (oldWidget.refreshTrigger != widget.refreshTrigger) {
+      _loadData();
+    }
   }
 
   @override
@@ -80,38 +93,9 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !_isSyncing) {
+    if (state == AppLifecycleState.resumed && !widget.isGlobalSyncing) {
       _loadData();
       _checkSmartPrompt();
-    }
-  }
-
-  Future<void> _checkAndRunInitialSync() async {
-    final prefs = await SharedPreferences.getInstance();
-    bool hasSynced = prefs.getBool('has_initial_sync_completed') ?? false;
-
-    if (!hasSynced) {
-      setState(() => _isSyncing = true);
-
-      await _smsService.syncHistory(
-        onProgress: (current, total) {
-          if (mounted) {
-            setState(() {
-              _currentSynced = current;
-              _totalToSync = total;
-            });
-          }
-        },
-      );
-
-      await prefs.setBool('has_initial_sync_completed', true);
-      
-      if (mounted) {
-        setState(() => _isSyncing = false);
-        _loadData(); 
-      }
-    } else {
-      _loadData();
     }
   }
 
@@ -122,12 +106,14 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     await LocalNotificationService().init();
     await _smsService.silentBackgroundSync();
     
+    final prefs = await SharedPreferences.getInstance();
     final list = await _smsService.getTransactionsByMonth(_selectedMonth);
     final forecastData = await _predictionService.getForecastForMonth(_selectedMonth);
     final appNotifCount = await DBService().getAppNotificationsCount();
     
     if (mounted) {
       setState(() {
+        _advancedSettings = prefs.getBool('advanced_settings') ?? false;
         _transactions = list;
         _forecast = forecastData;
         _appNotificationCount = appNotifCount;
@@ -825,52 +811,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     _loadData();
   }
 
-  // --- NEW TRANSACTION LIST WITH HEADERS AND 3D FLIP ENTRY ---
-  Widget _buildTransactionList() {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-            child: Row(
-              children: [
-                const Icon(Icons.list_alt_rounded, size: 14, color: Constants.colorAccent),
-                const SizedBox(width: 8),
-                Text(
-                  "DECRYPTED LEDGER",
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    fontSize: 10,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ).animate().fadeIn(delay: 500.ms),
-          ),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Constants.colorPrimary))
-                : _transactions.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: 100, top: 4),
-                    itemCount: _transactions.length,
-                    itemBuilder: (context, index) {
-                      return _buildTransactionItem(_transactions[index])
-                          .animate()
-                          .fade(duration: 500.ms, delay: (50 * index).ms)
-                          .slideY(begin: 0.2, curve: Curves.easeOutCubic)
-                          .flipV(begin: -0.1, end: 0, curve: Curves.easeOutCubic); // Added subtle 3D flip
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
+  // --- TRANSACTION LIST ITEMS ARE NOW BUILT DIRECTLY IN THE SLIVER TREE ---
 
   // --- NEW SCANNING RADAR EMPTY STATE ---
   Widget _buildEmptyState() {
@@ -957,6 +898,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
           ),
         ),
         onDismissed: (direction) async {
+          HapticFeedback.heavyImpact();
           setState(() => _transactions.removeWhere((item) => item.hash == txn.hash));
           final db = await DBService().database;
           await db.insert('ignored_hashes', {'hash': txn.hash}, conflictAlgorithm: ConflictAlgorithm.ignore);
@@ -965,6 +907,7 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
         },
         child: InkWell(
           onTap: () async {
+            HapticFeedback.lightImpact();
             bool? updated = await Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => TransactionDetailScreen(transaction: txn)),
@@ -1028,16 +971,22 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(
-                            txn.merchant, 
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white, 
-                              fontWeight: FontWeight.w700, 
-                              fontSize: 15, 
-                              letterSpacing: 0.5
-                            )
+                          Hero(
+                            tag: 'merchant_${txn.hash}',
+                            child: Material(
+                              type: MaterialType.transparency,
+                              child: Text(
+                                txn.merchant, 
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white, 
+                                  fontWeight: FontWeight.w700, 
+                                  fontSize: 15, 
+                                  letterSpacing: 0.5
+                                )
+                              ),
+                            ),
                           ),
                           const SizedBox(height: 6),
                           Row(
@@ -1123,137 +1072,132 @@ class _DashboardScreenState extends State<DashboardScreen> with WidgetsBindingOb
     String monthName = DateFormat('MMMM yyyy').format(_selectedMonth);
     return Scaffold(
       backgroundColor: Constants.colorBackground,
-      extendBodyBehindAppBar: true, 
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        surfaceTintColor: Colors.transparent, 
-        
-        // ADDED: Forces the title to perfectly align to the left
-        centerTitle: false, 
-        
-        title: Padding(
-          padding: const EdgeInsets.only(left: 8.0), // Tweak this number to get the exact spacing you want
-          child: Text(
-            "CIPHER SPEND", 
-            style: Constants.headerStyle.copyWith(fontSize: 16, letterSpacing: 2)
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: Badge(
-              isLabelVisible: _appNotificationCount > 0,
-              label: Text(_appNotificationCount.toString(), style: const TextStyle(fontSize: 10)),
-              backgroundColor: Constants.colorError,
-              child: const Icon(Icons.notifications_active_outlined, color: Colors.white, size: 22),
-            ).animate(onPlay: (c) => c.repeat(reverse: true)).scale(begin: const Offset(1,1), end: const Offset(1.1, 1.1)),
-            onPressed: () async {
-              await Navigator.push(context, MaterialPageRoute(builder: (_) => const AppNotificationsScreen()));
-              _loadData(); 
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.search_rounded, color: Colors.white, size: 22),
-            tooltip: "Search & Export",
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchExportScreen())),
-          ),
-          
-          // --- SLEEK POPUP MENU ---
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 22),
-            color: Constants.colorSurface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-            ),
-            offset: const Offset(0, 50),
-            onSelected: (value) async {
-              if (value == 'refresh') {
-                _loadData();
-              } else if (value == 'report') {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => VisualReportScreen(transactions: _transactions, budget: _forecast['budget'] ?? 0.0)));
-              } else if (value == 'profile') {
-                await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileEditScreen()));
-                _loadData(); 
-              } else if (value == 'settings') {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
-              }
-            },
-            itemBuilder: (BuildContext context) => [
-              PopupMenuItem(
-                value: 'refresh',
-                child: Row(children: [const Icon(Icons.refresh_rounded, color: Colors.white70, size: 20), const SizedBox(width: 12), Text("Refresh Sync", style: Constants.fontRegular.copyWith(fontSize: 14))]),
-              ),
-              PopupMenuItem(
-                value: 'report',
-                child: Row(children: [const Icon(Icons.bar_chart_rounded, color: Constants.colorAccent, size: 20), const SizedBox(width: 12), Text("Visual Report", style: Constants.fontRegular.copyWith(fontSize: 14))]),
-              ),
-              PopupMenuItem(
-                value: 'profile',
-                child: Row(children: [const Icon(Icons.person_outline_rounded, color: Colors.white70, size: 20), const SizedBox(width: 12), Text("Profile & Budget", style: Constants.fontRegular.copyWith(fontSize: 14))]),
-              ),
-              PopupMenuItem(
-                value: 'settings',
-                child: Row(children: [const Icon(Icons.settings_outlined, color: Colors.white70, size: 20), const SizedBox(width: 12), Text("Settings", style: Constants.fontRegular.copyWith(fontSize: 14))]),
-              ),
-            ],
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      
-// [FIXED] Hide the FAB completely while the initial sync is running
-      floatingActionButton: _isSyncing 
-        ? null 
-        : GestureDetector(
-            onTapDown: (_) => setState(() => _isFabPressed = true),
-            onTapUp: (_) async {
-              setState(() => _isFabPressed = false);
-              bool? didAdd = await Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualEntryScreen()));
-              if (didAdd == true) _loadData();
-            },
-            onTapCancel: () => setState(() => _isFabPressed = false),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOut,
-              transform: Matrix4.diagonal3Values(_isFabPressed ? 0.9 : 1.0, _isFabPressed ? 0.9 : 1.0, 1.0),
-              alignment: Alignment.center,
-              width: 60, 
-              height: 60, 
-              decoration: BoxDecoration(
-                color: Constants.colorPrimary,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Constants.colorPrimary.withValues(alpha: _isFabPressed ? 0.3 : 0.6),
-                    blurRadius: _isFabPressed ? 10 : 20,
-                    spreadRadius: _isFabPressed ? 2 : 5,
-                  )
-                ],
-              ),
-              child: const Icon(Icons.add_rounded, color: Colors.black, size: 32), 
-            ),
-          ).animate().scale(delay: 800.ms, duration: 500.ms, curve: Curves.easeOutBack),
+      // FAB is now managed by the parent MainWrapperScreen
+      // floatingActionButton: null,
       
       body: Stack(
         children: [
-          SafeArea(
-            child: Column(
-              children: [
-                _buildMonthSelector(monthName),
-                _buildPredictionCard(),
-                _buildTransactionList(),
-              ],
-            ),
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverAppBar(
+                backgroundColor: Constants.colorBackground,
+                elevation: 0,
+                scrolledUnderElevation: 0,
+                surfaceTintColor: Colors.transparent, 
+                pinned: true,
+                floating: true,
+                centerTitle: false, 
+                title: Padding(
+                  padding: const EdgeInsets.only(left: 8.0),
+                  child: Text(
+                    "CIPHER SPEND", 
+                    style: Constants.headerStyle.copyWith(fontSize: 16, letterSpacing: 2)
+                  ),
+                ),
+                actions: [
+                  IconButton(
+                    icon: Badge(
+                      isLabelVisible: _appNotificationCount > 0,
+                      label: Text(_appNotificationCount.toString(), style: const TextStyle(fontSize: 10)),
+                      backgroundColor: Constants.colorError,
+                      child: const Icon(Icons.notifications_active_outlined, color: Colors.white, size: 22),
+                    ).animate(onPlay: (c) => c.repeat(reverse: true)).scale(begin: const Offset(1,1), end: const Offset(1.1, 1.1)),
+                    onPressed: () async {
+                      HapticFeedback.lightImpact();
+                      await Navigator.push(context, MaterialPageRoute(builder: (_) => const AppNotificationsScreen()));
+                      _loadData(); 
+                    },
+                  ),
+                  if (_advancedSettings)
+                    IconButton(
+                      icon: const Icon(Icons.sync_rounded, color: Colors.white, size: 22),
+                      tooltip: "Force App Sync",
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        _loadData();
+                      },
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.account_circle_outlined, color: Constants.colorPrimary, size: 24),
+                    tooltip: "System Profile",
+                    onPressed: () async {
+                      HapticFeedback.lightImpact();
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ProfileEditScreen()),
+                      );
+                      if (mounted) _loadData();
+                    },
+                  ),
+                  const SizedBox(width: 4),
+                ],
+              ),
+              
+              SliverToBoxAdapter(
+                child: _buildMonthSelector(monthName),
+              ),
+              
+              SliverToBoxAdapter(
+                child: _buildPredictionCard(),
+              ),
+              
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.list_alt_rounded, size: 14, color: Constants.colorAccent),
+                      const SizedBox(width: 8),
+                      Text(
+                        "DECRYPTED LEDGER",
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.5),
+                          fontSize: 10,
+                          letterSpacing: 2,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ).animate().fadeIn(delay: 500.ms),
+                ),
+              ),
+              
+          // Suppress loading completely if global sync is running
+          if (widget.isGlobalSyncing) 
+            const SliverToBoxAdapter(child: SizedBox.shrink())
+          else if (_isLoading)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.only(top: 40),
+                child: Center(child: CircularProgressIndicator(color: Constants.colorPrimary)),
+              ),
+            )
+          else if (_transactions.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 40),
+                    child: _buildEmptyState(),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.only(bottom: 100, top: 4),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        return _buildTransactionItem(_transactions[index])
+                            .animate()
+                            .fade(duration: 500.ms, delay: (50 * index).ms)
+                            .slideY(begin: 0.2, curve: Curves.easeOutCubic)
+                            .flipV(begin: -0.1, end: 0, curve: Curves.easeOutCubic);
+                      },
+                      childCount: _transactions.length,
+                    ),
+                  ),
+                ),
+            ],
           ),
-          
-          if (_isSyncing)
-            SyncOverlay(
-              total: _totalToSync,
-              current: _currentSynced,
-              status: "Importing Financial History...",
-            ).animate().fadeIn(duration: 400.ms),
         ],
       ),
     );
